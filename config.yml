@@ -6,10 +6,11 @@ T: 100
 N_u: 100
 N_m: 30
 
-delta_t: 0.1  # s
+slot_length: 0.1  # s
 block_size: 1 # MB
-ans_size: 1e-3 # MB
+result_size: 1e-3 # MB
 
+csp_num: 5
 vm_num: 100 # start from #0
 task_freq: 5 # the numebr of tasks per second
 
@@ -30,4 +31,5 @@ log_pretext: change_N
 
 # Note: in the fogcom environment, the dict derived from config.yml is also used to sync some global variables:
 # n_slot - the current number of slots
+# link_check - a LinkCheck object used for retrieve the link state between two nodes
 # vm_database - a list storing all the vms' info, index: vmid, value: VM object

@@ -11,7 +11,7 @@ class VM(object):
         self.servers = []
         
     def add_server(self, server_id):
-        """Record the ID of a new server storing this vm
+        """Record the ID of a new server storing this vm.
 
         Args:
             server_id (int): server ID
@@ -20,7 +20,7 @@ class VM(object):
             self.servers.append(server_id)
     
     def get_servers(self):
-        """Get IDs of servers storing this vm
+        """Get IDs of servers storing this vm.
 
         Returns:
             list[int]: the list of server IDs
@@ -42,33 +42,69 @@ class Task(object):
         self.b0 = b0
         self.alpha = alpha
     
-    def vmid(self):
-        return self.sid
+    def value(self, dt):
+        ans = self.b0 - self.alpha * dt
+        return ans
     
-    def set_user_id(self, user_id):
-        self.user_id = user_id
+    def set_duration(self, duration):
+        """Set how long this task waits to be finished.
+
+        Args:
+            duration (float): the time duration between arrived and finished
+        """
+        self._duration = duration
     
-    def set_server_id(self, server_id):
-        self.server_id = server_id
+    def check_finished(self, slot_length, cslot):
+        """Check whether this task is finished at the beginning of this slot.
+
+        Args:
+            slot_length (float): the length of a slot (s)
+            cslot (int): the number of current slot
+
+        Returns:
+            Bool: True for finished, False for unfinished
+        """
+        if not hasattr(self, '_duration'):
+            print(f"Unset property: \'_duration\' in task {self.id}.")
+            return False
+        
+        if (cslot - self.t) * slot_length >= self._duration:
+            return True
+        else:
+            return False
     
-    def set_storage_id(self, storage_id):
-        self.storage_id = storage_id
+    def release(self):
+        """Relase this task after finished."""
+        # TODO: 使用更复杂的环境时(如 storage 需要考虑同时最多服务的对象数量), 需要修改此处
+        self._provider.occupied = False
     
-    def get_user_id(self):
-        if not hasattr(self, 'user_id'):
-            print(f"Unset property: \'user_id\' in task {self.id}.")
-            return -1
-        return self.user_id
+    def set_user(self, user):
+        self._user = user
     
-    def get_server_id(self):
-        if not hasattr(self, 'server_id'):
-            print(f"Unset property: \'server_id\' in task {self.id}.")
-            return -1
-        return self.server_id
+    def set_provider(self, provider):
+        self._provider = provider
+        provider.occupied = True
     
-    def get_storage_id(self):
-        if not hasattr(self, 'storage_id'):
-            print(f"Unset property: \'storage_id\' in task {self.id}.")
-            return -1
-        return self.storage_id
+    def set_storage(self, storage):
+        # TODO: 使用更复杂的环境时(如 storage 需要考虑同时最多服务的对象数量), 需要修改此处
+        self._storage = storage
+    
+    def user(self):
+        if not hasattr(self, '_user'):
+            print(f"Unset property: \'_user\' in task {self.id}.")
+            return
+        return self._user
+    
+    def provider(self):
+        if not hasattr(self, '_provider'):
+            print(f"Unset property: \'_provider\' in task {self.id}.")
+            return
+        return self._provider
+    
+    def storage(self):
+        if not hasattr(self, '_storage'):
+            print(f"Unset property: \'_storage\' in task {self.id}.")
+            return
+        return self._storage
+    
     

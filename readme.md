@@ -127,10 +127,10 @@ x_{link}(j,t) &= \left\{
 t_i  \le t < t_i + t_u(i,j) + t_{vm}(i,j)
 \ \bigcup \ 
 t_i + \Delta t(i,j,k) - t_d(i,j) \le t < t_i + \Delta t(i,j,k)  \\&
-|_{\exists i \in [1, N_i],\ \exists k \in N_m,\ x_{ij}^f = 1,\ x_{ik}^d = 1}\\
-0, & others\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad
+|_{\exists i \in [1, N_i],\ \exists k \in N_m,\ x_{ij}^f = 1,\ x_{ik}^d = 1},\\
+0, & others.\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad
 \end{array}
-\right. \ ,\\
+\right. \\
 
 \\
 
@@ -138,10 +138,10 @@ x_{vm}(k,t) &= \left\{
 \begin{array}{lr}
 1, & \quad \quad \ \ \
 t_i + t_u(i,j) \le t < t_i + t_u(i,j) + t_{vm}(i,j,k)  + t_p(i,j) 
-|_{\exists i \in [1, N_i],\ \exists j \in N_m,\ x_{ij}^f = 1,\ x_{ik}^d = 1}\\
-0, & others\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\ \ 
+|_{\exists i \in [1, N_i],\ \exists j \in N_m,\ x_{ij}^f = 1,\ x_{ik}^d = 1},\\
+0, & others.\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad \ \ \ 
 \end{array}
-\right. \ ,\\
+\right. \\
 
 \\
 
@@ -149,30 +149,30 @@ x_p(j,t) &= \left\{
 \begin{array}{lr}
 \delta_t \cdot c^j, & 
 t_i + t_u(i,j) + t_{vm}(i,j,k) \le\ t < t_i + t_u(i,j) + t_{vm}(i,j,k) \ + \\& t_p(i,j) 
-|_{\exists i \in [1, N_i],\ \exists k \in N_m,\ x_{ij}^f = 1,\ x_{ik}^d = 1} \\
+|_{\exists i \in [1, N_i],\ \exists k \in N_m,\ x_{ij}^f = 1,\ x_{ik}^d = 1}, \\
 w_i - \delta_t \cdot c^j \cdot [t_p(i,j)-1], &
 t_i + \Delta t(i,j,k) - t_d(i,j) -1 \le t < t_i + \Delta t(i,j,k) - t_d(i,j) \\&
-|_{\exists i \in [1, N_i],\ \exists k \in N_m,\ x_{ij}^f = 1,\ x_{ik}^d = 1}\\
-0, & others\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad 
+|_{\exists i \in [1, N_i],\ \exists k \in N_m,\ x_{ij}^f = 1,\ x_{ik}^d = 1},\\
+0, & others.\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\ \ \ 
 \end{array}
-\right. \ ,\\
+\right. \\
 
 \\
 
 x_s(j,t) &= \left\{ 
 \begin{array}{lr}
-s_i, & \ \ \
+s_i, & \ 
 t_i + t_u(i,j) \ \le \ t \ < \ t_i +  t_u(i,j) + t_{vm}(i,j,k)
-|_{\exists i \in [1, N_i],\ \exists k \in N_m,\ x_{ij}^f = 1,\ x_{ik}^d = 1}\\
+|_{\exists i \in [1, N_i],\ \exists k \in N_m,\ x_{ij}^f = 1,\ x_{ik}^d = 1},\\
 s_i + b\overline{loc}k^{vm_i}, &
-t_i + t_u(i,j) + t_{vm}(i,j,k) \ \le \ t \ < \ t_i + t_u(i,j) + t_{vm}(i,j,k)\ +\ t_p(i,j) \\&
-|_{\exists i \in [1, N_i],\ \exists k \in N_m,\ x_{ij}^f = 1,\ x_{ik}^d = 1}\\
+t_i + t_u(i,j) + t_{vm}(i,j,k) \ \le \ t \ < \ t_i+\ t_u(i,j)\ +\ t_{vm}(i,j,k)\ +\ t_p(i,j) \\&
+|_{\exists i \in [1, N_i],\ \exists k \in N_m,\ x_{ij}^f = 1,\ x_{ik}^d = 1},\\
 e_i, &
 t_i + \Delta t(i,j,k) - t_d(i,j) \le t < t_i + \Delta t(i,j,k)
-|_{\exists i \in [1, N_i],\ \exists k \in N_m,\ x_{ij}^f = 1,\ x_{ik}^d = 1}\\
-0, \quad \ \ & others\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad \ \ 
+|_{\exists i \in [1, N_i],\ \exists k \in N_m,\ x_{ij}^f = 1,\ x_{ik}^d = 1},\\
+0, \quad \ \ & others.\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad\quad \ \ \ 
 \end{array}
-\right. \ .\\
+\right. \\
 
 \end{aligned}
 $$

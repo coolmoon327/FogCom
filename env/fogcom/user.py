@@ -19,14 +19,14 @@ class User(Node):
         b0 = np.random.randint(2000, 10000)        # [2000, 10000]
         alpha = np.random.randint(500, 1000) * 1.   # [500, 1000]
         task = Task(t, s, w, sid, b0, alpha)
-        task.set_user_id(self.id)
+        task.set_user(self)
         return task
     
     def step(self):
         self.tasks.clear()
         
         r = np.random.randint(0, 10000) / 10000.
-        n_tasks_per_user_in_slot = self.config['task_freq'] * self.config['delta_t'] / self.config['N_u']
+        n_tasks_per_user_in_slot = self.config['task_freq'] * self.config['slot_length'] / self.config['N_u']
         while n_tasks_per_user_in_slot >= 1.:
             # more than 1, directly add
             n_tasks_per_user_in_slot -= 1.
