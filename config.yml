@@ -1,0 +1,33 @@
+# Environment
+
+seed: 88
+
+T: 100
+N_u: 100
+N_m: 30
+
+delta_t: 0.1  # s
+block_size: 1 # MB
+ans_size: 1e-3 # MB
+
+vm_num: 100 # start from #0
+task_freq: 5 # the numebr of tasks per second
+
+# Training
+
+batch_size: 512
+num_ep_train: 20 # number of episodes from all agents
+# max_ep_length: 10000 # maximum number of steps per episode
+max_slot_per_ep: 30
+
+# Miscellaneous
+
+results_path: results
+get_statistics: True
+print_statistics_per_slot: False
+debug_mode: 1
+log_pretext: change_N
+
+# Note: in the fogcom environment, the dict derived from config.yml is also used to sync some global variables:
+# n_slot - the current number of slots
+# vm_database - a list storing all the vms' info, index: vmid, value: VM object
