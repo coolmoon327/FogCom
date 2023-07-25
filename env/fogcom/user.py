@@ -22,7 +22,7 @@ class User(Node):
         task.set_user(self)
         return task
     
-    def step(self):
+    def next_slot(self):
         self.tasks.clear()
         
         r = np.random.randint(0, 10000) / 10000.

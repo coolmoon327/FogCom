@@ -41,10 +41,14 @@ class Task(object):
         # b(x) = b0 - alpha * x
         self.b0 = b0
         self.alpha = alpha
+        
+        self.drpped = False
     
     def value(self, dt):
         ans = self.b0 - self.alpha * dt
         return ans
+    
+    b = value   # alias that keeps consistent with the paper
     
     def set_duration(self, duration):
         """Set how long this task waits to be finished.
@@ -76,7 +80,8 @@ class Task(object):
     def release(self):
         """Relase this task after finished."""
         # TODO: 使用更复杂的环境时(如 storage 需要考虑同时最多服务的对象数量), 需要修改此处
-        self._provider.occupied = False
+        if hasattr(self, '_provider'):
+            self._provider.occupied = False
     
     def set_user(self, user):
         self._user = user
@@ -107,4 +112,7 @@ class Task(object):
             return
         return self._storage
     
+    def drop(self):
+        self.dropped = True
+        self.release()
     

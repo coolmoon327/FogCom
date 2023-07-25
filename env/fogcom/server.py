@@ -12,6 +12,7 @@ class Server(Node):
         # 1. set properties
         super().reset()
         self.csp = np.random.randint(0, self.config['csp_num'])
+        self.strategy = np.random.randint(0, self.config['follower_strategies_num'])
         
         # 2. set vm storage
         self.vms = []
@@ -31,9 +32,49 @@ class Server(Node):
         # 4. set states
         self.occupied = False
 
-    def step(self):
+    def next_slot(self):
         pass
     
+    def is_estimate(self, node: Node):
+        estimate = True
+        if hasattr(node, 'csp'):
+            if self.csp == node.csp:
+                estimate = False
+        if self.is_known[node.id]:
+            estimate = False
+        return estimate
+    
+    def bias(self, task: Task, storage: Node):
+        estimate = self.is_estimate(storage)
+        if self.strategy == 0:
+            ans = 0
+        elif self.strategy == 1:
+            ans = t_vm(task, self, storage, estimate)
+        elif self.strategy == 2:
+            ans = - t_vm(task, self, storage, estimate)
+        elif self.strategy == 3:
+            ans = self.config['M'] if self.csp == storage.csp else 0
+        ans *= self.config['beta']
+        return ans
+    
+    def cost(self, task: Task, storage: Node):
+        estimate = self.is_estimate(storage)
+        ans = cost_task(task, self, storage, estimate)
+        return ans
+    
+    def price(self, task: Task, storage: Node):
+        estimate = self.is_estimate(storage)
+        dt = delta_t(task, self, storage, estimate)
+        ans = self.config['alpha'] * task.value(dt)
+        return ans
+    
     def select_storage(self, task: Task, candidates: list):
-        # should judge if the two nodes are from the same CSP
-        pass
+        maxx = 0.
+        target_s = None
+        for node in candidates:
+            obj = self.price(task, node) - self.cost(task, node) + self.bias(task, node)
+            if obj > maxx:
+                maxx = obj
+                target_s = node
+        
+        return target_s

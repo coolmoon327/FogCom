@@ -21,6 +21,9 @@ class Environment(object):
         
         for node in self.users + self.servers:
             node.reset()
+        
+        # loggers
+        self.drop_num = 0
     
     def seed(self, seed):
         np.random.seed(seed)
@@ -51,7 +54,7 @@ class Environment(object):
         
         # 2. node update
         for node in self.users + self.servers:
-            node.step()
+            node.next_slot()
         
         # 3. new tasks
         for node in self.users:
@@ -70,7 +73,7 @@ class Environment(object):
     
     def next_task(self):
         # 1. if no new task, entering a new slot
-        while self.task_index == len(self.new_tasks):
+        while self.task_index >= len(self.new_tasks):
             self.next_slot()
         
         # 2. get a new task
@@ -80,27 +83,43 @@ class Environment(object):
         # 3. assign a provider by estimating
         ret = self.leader.assign_provider(task)
         if not ret:
-            # recursion
-            return self.next_task()
+            self.drop_num += 1
+            return self.next_task() # recursion
         
         # 4. get all candidates
-        pass
+        self.raw_candidates = self.leader.search_candidates()
         
         # 5. generate state info
+        # 如果要对某组情况过拟合, 考虑加入节点编号
+        # [s, alpha, p_link, p_s, bw, lt, tag[0], ..., tag[tag_len], is_same_csp[0], p_vm[0], min_bw_rd[0], lt[0], ...]
         state = []
         pass
     
         return state
     
     def step(self, action):
-        # 1. execute action 
-        pass
+        task = self.new_tasks[self.task_index-1]    # notice that the task_index indicates the latter task after the current task (seen in next_task 2.)
         
-        # 2. update task info (storage, duration)
-        pass
+        # 1. translate action 
+        candidates = []
+        for i in range(len(action)):    # 1 - selected, 0 - not selected
+            if action[i]:
+                candidates.append(self.raw_candidates[i])
+        
+        # 2. execute action  (storage, duration, act_tasks)
+        ret = self.leader.inform_candidates(task, candidates)
+        if not ret:
+            self.drop_num += 1
+            # penalty?
+            pass
+            return
+        
+        self.act_tasks.append(task)
         
         # 3. calculate precise reward
         pass
         
         # 4. get next task (state)
         state = self.next_task()
+        
+        return

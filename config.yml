@@ -14,6 +14,18 @@ csp_num: 5
 vm_num: 100 # start from #0
 task_freq: 5 # the numebr of tasks per second
 
+follower_strategies_num: 4
+# 0 - no bias
+# 1 - computation-conservative
+# 2 - storage-conservative
+# 3 - CSP-preference
+alpha: 1.
+beta: 1.
+M: 1e4
+
+tag_len: 10 # the length of test tags
+cand_num: 10  # the number of candidates roughly selected by the leader before DRL policy
+
 # Training
 
 batch_size: 512

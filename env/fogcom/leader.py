@@ -54,4 +54,31 @@ class Leader(object):
             task.set_provider(target_p)
             return 1
         else:
+            task.drop()
             return 0
+    
+    def search_candidates(self, task: Task):
+        candidates = []
+        for node in self.servers:
+            if task.sid in node.vms:
+                candidates.append(node)
+        
+        # sort
+        
+        # cutting
+        
+        # padding
+        
+        return candidates
+    
+    def inform_candidates(self, task: Task, candidates: list):
+        provider = task.provider()
+        storage = provider.select_storage(candidates)
+        if not storage:
+            task.drop()
+            return 0
+        
+        task.set_storage(storage)
+        real_duration = delta_t(task, provider, storage, False)
+        task.set_duration(real_duration)
+        return 1

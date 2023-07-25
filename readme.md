@@ -217,9 +217,9 @@ max_{x_i,x_{ij}^f,x_{ik}^{CA}} \quad
 \\
 
 S. T. \quad \quad \quad \quad \quad \quad \quad \quad \quad \quad 
-K_{ij}& = \mu_f^j(B(i),INFO(x_{ik}^{CA})),\\
+K_{ij}& = \mu_f^j(B(i),INFO(\{x_{ik}^{CA}\})),\\
 
-INFO(x_{ik}^{CA})=\bigcup_{k \in N_m} &x_{ik}^{CA} \cdot \{ k,\ CSP(k),\ p_{vm}^d,\ min(bw^k,rd^k),\ lt^k \},\\
+INFO(\{x_{ik}^{CA}\})=\bigcup_{k \in N_m} &x_{ik}^{CA} \cdot \{ k,\ CSP(k),\ p_{vm}^k,\ min(bw^k,rd^k),\ lt^k \},\\
 
 0 \le & \sum_{j \in N_m} x_{ij}^f \le 1,\ x_i = \sum_{j \in N_m}x_{ij}^f,\\
 
@@ -235,7 +235,7 @@ INFO(x_{ik}^{CA})=\bigcup_{k \in N_m} &x_{ik}^{CA} \cdot \{ k,\ CSP(k),\ p_{vm}^
 \end{aligned}
 $$
 
-其中，决策变量 $x_{ik}^{CA}$ 是 $l$ 为任务 $i$ 选择的备选存储节点的指示变量，$\mu_f^j(*)$ 是节点 $j$ 的 follower 决策函数，它根据任务信息 $B(i)$ 与备选存储节点的信息 $INFO(x_{ik}^{CA})$ 决策出目标存储节点的编号。类似地，$l$ 选择 $x_{ij}^{CA}$ 的决策函数可以被表示为 $\mu_l(*)$，其输入是任务信息 $B(i)$、计算节点的状态信息 $INFO(x_{ij}^f)$、与所有节点的信息 $INFO(\bigcup_{j \in N_m} \{1\})$。值得注意的是，策略 $\mu_f^j(*)$ 内部隐含了节点 $j$ 对某些节点更深层次的信息，譬如它对同一运营商所属的其他节点的详细链路信息，而策略 $\mu_l(*)$ 仅能知晓 $INFO(*)$ 函数中包含的片面节点信息。
+其中，决策变量 $x_{ik}^{CA}$ 是 $l$ 为任务 $i$ 选择的备选存储节点的指示变量，$\mu_f^j(*)$ 是节点 $j$ 的 follower 决策函数，它根据任务信息 $B(i)$ 与备选存储节点的信息 $INFO(\{x_{ik}^{CA}\})$ 决策出目标存储节点的编号。类似地，$l$ 选择 $x_{ij}^{CA}$ 的决策函数可以被表示为 $\mu_l(*)$，其输入是任务信息 $B(i)$、计算节点的状态信息 $INFO(\{x_{ij}^f\})$（$\{ j,\ CSP(j),\ p_c^j,\ p_{link}^j,\ p_s^j,\ c^j,\ bw^j,\ lt^j,\ S^j \}$ ）、与所有节点的信息 $INFO(\bigcup_{j \in N_m} \{1\})$。值得注意的是，策略 $\mu_f^j(*)$ 内部隐含了节点 $j$ 对某些节点更深层次的信息，譬如它对同一运营商所属的其他节点的详细链路信息，而策略 $\mu_l(*)$ 仅能知晓 $INFO(*)$ 函数中包含的片面节点信息。
 
 ​	在这个模型中，$l$ 通过修改 $f$ 能够选择的存储节点来控制其决策，这种方法的本质是在限制 follower 的视野。详细的决策过程包括：
 
@@ -287,7 +287,7 @@ $$
 1. 无偏好：$Bias_0(i,j,k) = 0$；
 2. 计算保守型：边缘节点同时还在承接其他计算服务，它希望降低单位时间内的计算资源占用，$Bias_1(i,j,k) = - \beta \cdot \frac{t_c}{\Delta \hat{t}(i,j,k)}$；
 3. 存储保守型：边缘节点同时还在承接其他存储服务，它希望减少存储资源的占用时间，$Bias_2(i,j,k) = - \beta \cdot \frac{t_u + \hat{t}_{vm}+t_d}{\Delta \hat{t}(i,j,k)}$；
-4. 同运营商保护型：边缘节点倾向于选择相同运营商的节点，$Bias_3(i,j,k) = \left\{ \begin{aligned} &\beta \cdot \Mu, \quad j=k,\\ &0, \quad \quad \ others. \end{aligned} \right.$
+4. 同运营商优先型：边缘节点倾向于选择相同运营商的节点，$Bias_3(i,j,k) = \left\{ \begin{aligned} &\beta \cdot \Mu, \quad j=k,\\ &0, \quad \quad \ others. \end{aligned} \right.$
 
 ​	上述表达式中，$\beta$ 是偏好项的系数，$\Mu$ 是一个较大的正实数。实际上，考虑到 $f$ 对存储节点的选择只会影响 VM 的下载时间，计算和存储保守型策略的偏好函数又可以分别表示为 $Bias_1(i,j,k) = \beta \cdot \hat{t}_{vm}$ 和 $Bias_2(i,j,k) = - \beta \cdot \hat{t}_{vm}$。
 
@@ -295,7 +295,7 @@ $$
 
 ### Follower 建模
 
-​	由于作为 $f$ 的节点 $j$ 的策略本质上是根据时隙 $t$ 中接收到的任务 $i$ 与备选节点的信息 $obs_t^f(i) = \{B(i),INFO_{ij}^{CA}\}$ 选出一个目标节点 $K_{ij} = \mu_f^j(obs_f)$，我们可以将它的决策过程建模成马尔科夫决策过程（MDP）。它的环境观测值就是 $obs_t^f(i)$，状态空间的维度根据待选节点的数量 $m_i^{CA}$ 变化。行为是  $m_i^{CA}$ 个在 $[0,\ 1]$ 取值的实数组成的独热码（one-hot code），其中值最大的数所对应的节点作为选择出的目标存储节点。为了最大化它自己的优化目标，其回报函数为 $R_t^f(i,j,k) = Price(i,j,k) - Cost^{task}(i, j, k) + Bias(i,j,k)$。由于边缘节点的优化目标为 $G_t^f=R_t^f$，意味着 $G_t^f=R_t^f + \sum_{i =1}^{+\infty} 0^i \cdot R_{t+i}^j$，即该过程是一个单步马尔科夫决策过程。
+​	由于作为 $f$ 的节点 $j$ 的策略本质上是根据时隙 $t$ 中接收到的任务 $i$ 与备选节点的信息 $obs_t^f(i) = \{B(i),INFO(\{x_{ik}^{CA}\})\}$ 选出一个目标节点 $K_{ij} = \mu_f^j(obs_f)$，我们可以将它的决策过程建模成马尔科夫决策过程（MDP）。它的环境观测值就是 $obs_t^f(i)$，状态空间的维度根据待选节点的数量 $m_i^{CA}$ 变化。行为是  $m_i^{CA}$ 个在 $[0,\ 1]$ 取值的实数组成的独热码（one-hot code），其中值最大的数所对应的节点作为选择出的目标存储节点。为了最大化它自己的优化目标，其回报函数为 $R_t^f(i,j,k) = Price(i,j,k) - Cost^{task}(i, j, k) + Bias(i,j,k)$。由于边缘节点的优化目标为 $G_t^f=R_t^f$，意味着 $G_t^f=R_t^f + \sum_{i =1}^{+\infty} 0^i \cdot R_{t+i}^j$，即该过程是一个单步马尔科夫决策过程。
 
 ​	在本文中，虽然我们并不关注 $l$ 的具体实现，只假设它使用的深度强化学习（DRL）算法进行决策，但是为了证明该建模的可实践性，这里给出这种状态空间与行为空间均不稳定的 MDP 模型解决方案：使用 Attention 网络作为 DRL 智能体的决策模型，在第一层输入任务信息，其后的不定长层依次输入 $m_i^{CA}$ 个节点的信息，然后吐出 $m_i^{CA}$ 个 $[0,\ 1]$ 取值的数作为独热码。
 
@@ -307,13 +307,13 @@ $$
 $$
 G_t^l=R_t^l + \sum_{i =1}^{+\infty} \gamma^i \cdot R_{t+i}^l,
 $$
-其中，$f^*$ 是 $l$ 选出的计算节点，视作环境的一部分，$\gamma$ 为折扣因子（discounted factor）。为了简化求解，$l$ 的状态空间与行为空间需要是固定的。因此，我们将行为设计为对 $N_m$ 个节点的选择概率分布的参数，节点 $i$ 的选择概率由一个均值 $\mu_i$ 和方差 $\sigma_i$ 的高斯分布采样后，再经过 Sigmoid 函数归一化后得出。$l$ 的行为空间就是这 $2N_m$ 个参数，从头到尾依次表示每个节点采样使用的均值和方差。同时，状态观测值 $obs_t^l(i) = \{B(i),INFO_{if^*}^{f},INFO(\bigcup_{j \in N_m} \{1\})\}$ 也是定长的，它的状态空间是稳定的。
+其中，$f^*$ 是 $l$ 选出的计算节点，视作环境的一部分，$\gamma$ 为折扣因子（discounted factor）。为了简化求解，$l$ 的状态空间与行为空间需要是固定的。因此，我们将行为设计为对 $N_m$ 个节点的选择概率分布的参数，节点 $i$ 的选择概率由一个均值 $\mu_i$ 和方差 $\sigma_i$ 的高斯分布采样后，再经过 Sigmoid 函数归一化后得出。$l$ 的行为空间就是这 $2N_m$ 个参数，从头到尾依次表示每个节点采样使用的均值和方差。同时，状态观测值 $obs_t^l(i) = \{B(i),INFO(\{x_{ij}^f\}),INFO(\bigcup_{j \in N_m} \{1\})\}$ 也是定长的，它的状态空间是稳定的。
 
 ​	作为一个 Stackelberg 游戏中的 leader，按照传统的求解思路，$l$ 的决策就是在给定 $f$ 的最优策略的情况下，通过求解约束优化问题得到自己的最佳策略。因此，它的最佳策略可以被表示为：
 $$
 \mu_l^*(obs_t^l)\ =\ max_{a_t}\ E\ [\ G_t^l\ |\ obs_t^l,\ a_t,\ \hat\mu_f^j\ ],
 $$
-由于 $l$ 无法知晓 $f$ 的真正策略，它只能使用 $\hat\mu_f^j \approx class_j$ 进行估计。如果将 $obs_t^l(i)$ 与 $\hat\mu_f^j$ 进行合并，得到 $obs_t^{l'} = \{B(i),INFO_{if^*}^{f}, TA_{f^*},INFO(\bigcup_{j \in N_m} \{1\})\}$，那么有：
+由于 $l$ 无法知晓 $f$ 的真正策略，它只能使用 $\hat\mu_f^j \approx class_j$ 进行估计。如果将 $obs_t^l(i)$ 与 $\hat\mu_f^j$ 进行合并，得到 $obs_t^{l'} = \{B(i),INFO(\{x_{ij}^f\}), TA_{f^*},INFO(\bigcup_{j \in N_m} \{1\})\}$，那么有：
 $$
 \mu_l^*(obs_t^l)\ =\ max_{a_t}\ E\ [\ G_t^l\ |\ obs_t^{l'},\ a_t\ ],
 $$
