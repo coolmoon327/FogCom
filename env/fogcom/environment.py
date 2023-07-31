@@ -6,10 +6,92 @@ from .server import *
 from .user import *
 
 class Environment(object):
+    """
+    ### Description
+    
+    This environment simulates a stackelberg game in a fog computing network.
+    There are `N_u` users and `N_m` edge servers in the network, and edge servers will provide fog computing services for the users.
+    Since each edge server has limited storage capacity, it only maintains parts of the `vm_num` virtual machines (VMs) and other VMs can be mounted from another server during service.
+    In each time slot (of total `T` slots), some of the users will generate tasks and then inform the leader node (fog computing administrator).
+    The leader node will select an end server to be the service provider and choose `cand_num` satisfied servers as storage candidates.
+    Then these candidates' information will be packaged with the task information as the observation, and RL algorithm should make a decision based this observation to further select the candidates.
+    The selected candidates will be informed to the service provider by the leader, after which the provider will decide the target storage node by its own strategy.
+
+    ### Action Space
+    
+    The action is a `ndarray` with shape `(cand_num,)`, in which each element can take values `{0, 1}` indicating its related node (based on the index) is selected.
+    
+    | Num | Action             |
+    |-----|--------------------|
+    | 0   | Deprecate the node |
+    | 1   | Select the node    |
+    
+    **Note**: Sometimes there are less than `cand_num` valid candidates, and the rest are Null nodes (whose info is `(-1., -1., -1., -1.,)`). 
+    If RL selects no valid node, it will be punished by the reward of `penalty`.
+    
+    ### Observation Space
+    
+    The observation is a `ndarray` with shape `(6+tag_len+4*cand_num,)` with the values corresponding to the information of task, provider, and candidates:
+    
+    | Num           | Observation                        | Min                  | Max                |
+    |---------------|------------------------------------|----------------------|--------------------|
+    | 0             | Task Size                          | -10.                 | 20.                |
+    | 1             | Alpha in `B(t)=B_0-Alpha*t`        | 500.                 | 1000.              |
+    | 2             | Price of Provider's Network Link   | 100.                 | 1000.              |
+    | 3             | Price of Provider's Storage        | 10.                  | 50.                |
+    | 4             | Bandwidth of Provider              | 1.                   | 50.                |
+    | 5             | Latency of Provider                | 0.001                | 1.                 |
+    | 6 ~ tag_len+5 | Tags of Provider's Strategy        | 0                    | N_m                |
+    | tag_len+6     | Candidate 0's ISP = Provider's?    | 0                    | 1                  |
+    | tag_len+7     | Price of Candidate 0's VM Service  | 100.                 | 1000.              |
+    | tag_len+8     | Upload Speed of Candidate 0        | 1.                   | 50.                |
+    | tag_len+9     | Latency of Candidate 0             | 0.001                | 1.                 |
+    ...
+    | 2+tag_len+4*cand_num | Candidate `cand_num`'s ISP = Provider's?   | 0     | 1                  |
+    | 3+tag_len+4*cand_num | Price of Candidate `cand_num`'s VM Service | 100.  | 1000.              |
+    | 4+tag_len+4*cand_num | Upload Speed of Candidate `cand_num`       | 1.    | 50.                |
+    | 5+tag_len+4*cand_num | Latency of Candidate `cand_num`            | 0.001 | 1.                 |
+    
+    ### Rewards
+    
+    Since the RL algorithm is used as the policy of the leader node, the reward comes from Social Welfare which is the leader's optimize objective.
+    Some parts of Social Welfare are unassociated with the policy, thus the reward contains only the related parts.
+    
+    Reward = - Alpha * t_vm - (p_link * t_vm + p_s * s * t_vm) - p_vm * t_vm
+    
+    The result of the above function is always negative, so the RL can use a term of moving average `M_AVG` to shape the reward when training the neuro network.
+    
+    Shaped_Reward = Reward - M_AVG
+    
+    ### Episode Termination
+    
+    The episode terminates if any one of the following occurs:
+    1. Slot length is greater than `T`
+    
+    """
+    
     def __init__(self, config={}):
         self.config = config
         self.generate_topology()
         self.reset()
+        
+        # Env Info
+        high = np.array(
+            [20., 1000., 1000., 50., 50., 1.]
+            +[config['N_m'] for _ in range(config['tag_len'])]
+            +[1, 1000., 50., 1.,]*config['cand_num'],
+            dtype=np.float32,
+        )
+        
+        low = np.array(
+            [-10., 500., 100., 10., 1., 0.001]
+            +[0 for _ in range(config['tag_len'])]
+            +[0., 100., 1., 0.001,]*config['cand_num'],
+            dtype=np.float32,
+        )
+        
+        self.observation_space = spaces.Box(low, high, dtype=np.float32)
+        self.action_space = spaces.MultiBinary(config['cand_num'])
     
     def reset(self):
         self.config['n_slot'] = 0   # used to synchronize the number of slots among different py files in this module
@@ -24,6 +106,9 @@ class Environment(object):
         
         # loggers
         self.drop_num = 0
+        
+        state = self.next_task()
+        return
     
     def seed(self, seed):
         np.random.seed(seed)
@@ -85,17 +170,50 @@ class Environment(object):
         if not ret:
             self.drop_num += 1
             return self.next_task() # recursion
+        provider: Node = task.provider()
         
         # 4. get all candidates
         self.raw_candidates = self.leader.search_candidates()
+        if provider in self.raw_candidates:
+            task.set_storage(provider)
+            self.execute_task()
+            return self.next_task() # recursion
         
         # 5. generate state info
         # 如果要对某组情况过拟合, 考虑加入节点编号
         # [s, alpha, p_link, p_s, bw, lt, tag[0], ..., tag[tag_len], is_same_csp[0], p_vm[0], min_bw_rd[0], lt[0], ...]
+        # 6 + tag_len + 4 * cand_num
         state = []
-        pass
+        state.append(task.s)
+        state.append(task.alpha)
+        state.append(provider.p_link)
+        state.append(provider.p_s)
+        state.append(provider.bw)
+        state.append(provider.lt)
+        state.append(provider.strategy) # TODO: 暂时用作测试, 完善后改回 tag
+        for node in self.raw_candidates:
+            s = []
+            s.append(1. if provider.csp == node.csp else 0.)
+            s.append(node.p_vm)
+            s.append(min(node.bw, node.rd))
+            s.append(node.lt)
+            state += s
     
         return state
+    
+    def execute_task(self, task: Task):
+        provider = task.provider()
+        storage = task.storage()
+        
+        # set task state
+        real_duration = delta_t(task, provider, storage, False)
+        task.set_duration(real_duration)
+        
+        # maintain active tasks list
+        self.act_tasks.append(task)
+        
+        # log sw
+        pass
     
     def step(self, action):
         task = self.new_tasks[self.task_index-1]    # notice that the task_index indicates the latter task after the current task (seen in next_task 2.)
@@ -110,16 +228,19 @@ class Environment(object):
         ret = self.leader.inform_candidates(task, candidates)
         if not ret:
             self.drop_num += 1
-            # penalty?
-            pass
-            return
+            reward = self.config['penalty']
         
-        self.act_tasks.append(task)
-        
-        # 3. calculate precise reward
-        pass
+        else:
+            self.execute_task(task)
+            
+            # 3. calculate reward
+            provider: Node = task.provider()
+            storage: Node = task.storage()
+            # Reward = - Alpha * t_vm - (p_link * t_vm + p_s * s * t_vm) - p_vm * t_vm
+            reward = - (task.alpha + provider.p_link + provider.p_s * task.s + storage.p_vm) * t_vm(task, provider, storage, False) 
         
         # 4. get next task (state)
         state = self.next_task()
         
-        return
+        terminal = self.config['n_slot'] >= self.config['T']
+        return state, reward, terminal

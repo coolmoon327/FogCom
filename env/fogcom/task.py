@@ -1,4 +1,5 @@
 import numpy as np
+import copy
 
 class VM(object):
     def __init__(self, id, size=-1.):
@@ -25,7 +26,7 @@ class VM(object):
         Returns:
             list[int]: the list of server IDs
         """
-        return self.servers
+        return copy.deepcopy(self.servers)
 
 class Task(object):
     total_tasks=0
@@ -98,19 +99,19 @@ class Task(object):
         if not hasattr(self, '_user'):
             print(f"Unset property: \'_user\' in task {self.id}.")
             return
-        return self._user
+        return copy.deepcopy(self._user)
     
     def provider(self):
         if not hasattr(self, '_provider'):
             print(f"Unset property: \'_provider\' in task {self.id}.")
             return
-        return self._provider
+        return copy.deepcopy(self._provider)
     
     def storage(self):
         if not hasattr(self, '_storage'):
             print(f"Unset property: \'_storage\' in task {self.id}.")
             return
-        return self._storage
+        return copy.deepcopy(self._storage)
     
     def drop(self):
         self.dropped = True

@@ -2,8 +2,11 @@ import numpy as np
 
 class Node(object):
     def __init__(self, id:int, config={}):
-        self.config = config
         self.id = id
+        if id == -1:    # Null Node
+            return
+        
+        self.config = config
         
         self.c = np.random.randint(100, 1000) * 1e7            # [1e9, 1e10] cycle/s
         self.bw = np.random.randint(10, 500) / 10.             # [1, 50.] MBps
@@ -19,3 +22,11 @@ class Node(object):
     
     def reset(self):
         pass
+    
+    def is_Null(self):
+        return self.id == -1
+
+
+class NullNode(Node):
+    def __init__(self):
+        super().__init__(-1)

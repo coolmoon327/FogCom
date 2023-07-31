@@ -42,12 +42,9 @@ class Leader(object):
             if task.s + vm.block_size > node.S:
                 continue
             
-            dt = delta_t()
-            u = task.value(dt)
-            c = cost_task(task, node)
-            sw = u - c
-            if sw > maxx:
-                maxx = sw
+            es_sw = social_welfare(task, node)
+            if es_sw > maxx:
+                maxx = es_sw
                 target_p = node
         
         if target_p and cand_exist:
@@ -58,18 +55,27 @@ class Leader(object):
             return 0
     
     def search_candidates(self, task: Task):
-        candidates = []
-        for node in self.servers:
-            if task.sid in node.vms:
-                candidates.append(node)
+        provider = task.provider()
+        candidates = self.config['vm_database'][task.sid].get_servers()
+        priorities = []
+        for node in candidates:
+            es_sw = social_welfare(task, provider, node)
+            priorities.append(es_sw)
         
         # sort
-        
-        # cutting
+        # 这个排序方法只有当被排序的数组中各元素不同才能用
+        sorted_cand = sorted(candidates, key=lambda x: -priorities[candidates.index(x)])
         
         # padding
+        while len(sorted_cand) < cand_num:
+            sorted_cand.append(NullNode())
         
-        return candidates
+        # cutting
+        cand_num = self.config['cand_num']
+        if len(sorted_cand) > cand_num:
+            sorted_cand = sorted_cand[0:cand_num]
+        
+        return sorted_cand
     
     def inform_candidates(self, task: Task, candidates: list):
         provider = task.provider()
@@ -79,6 +85,4 @@ class Leader(object):
             return 0
         
         task.set_storage(storage)
-        real_duration = delta_t(task, provider, storage, False)
-        task.set_duration(real_duration)
         return 1

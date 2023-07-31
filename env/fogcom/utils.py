@@ -83,6 +83,7 @@ def cost_task_1(task: Task, provider: Node, storage: Node = None, estimate=True)
     return ans
 
 def cost_task_2(task: Task, provider: Node, storage: Node, estimate=True):
+    # Assume the storage usage price is still t_p when provider == storage
     ans = storage.p_vm * (t_vm(task, provider, storage, estimate) + t_p(task, provider))
     return ans
 
@@ -95,6 +96,9 @@ def delta_t(task: Task, provider: Node, storage: Node = None, estimate=True):
     return ans
 
 def t_u(task: Task, provider: Node, estimate=True):
+    if task.user() == provider:
+        return 0.
+    
     conf = provider.config
     user = task.user()
     if estimate:
@@ -105,6 +109,9 @@ def t_u(task: Task, provider: Node, estimate=True):
     return ans
 
 def t_vm(task: Task, provider: Node, storage: Node, estimate=True):
+    if provider == storage:
+        return 0.
+
     conf = provider.config
     vmid = R(conf, task.sid)
     vm: VM = conf['vm_database'][vmid]
@@ -121,6 +128,9 @@ def t_p(task: Task, provider: Node):
     return ans
 
 def t_d(task: Task, provider: Node, estimate=True):
+    if task.user() == provider:
+        return 0.
+    
     conf = provider.config
     user = task.user()
     if estimate:
@@ -128,4 +138,17 @@ def t_d(task: Task, provider: Node, estimate=True):
     else:
         bw_uf, lt_uf = conf['link_check'].check(user, provider)
     ans = conf['result_size'] / bw_uf + lt_uf
+    return ans
+
+##### social welfare
+
+def social_welfare(task: Task, provider: Node, storage: Node = None, estimate=True):
+    u = utility(task, provider, storage, estimate)
+    c = cost_task(task, provider, storage, estimate)
+    ans = u - c
+    return ans
+
+def utility(task: Task, provider: Node, storage: Node = None, estimate=True):
+    dt = delta_t(task, provider, storage, estimate)
+    ans = task.value(dt)
     return ans

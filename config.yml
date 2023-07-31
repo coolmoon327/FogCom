@@ -23,7 +23,7 @@ alpha: 1.
 beta: 1.
 M: 1e4
 
-tag_len: 10 # the length of test tags
+tag_len: 1 # the length of test tags
 cand_num: 10  # the number of candidates roughly selected by the leader before DRL policy
 
 # Training
@@ -33,13 +33,13 @@ num_ep_train: 20 # number of episodes from all agents
 # max_ep_length: 10000 # maximum number of steps per episode
 max_slot_per_ep: 30
 
+penalty: -1000. # penalty for wrong selection (Null Node)
+
 # Miscellaneous
 
 results_path: results
-get_statistics: True
-print_statistics_per_slot: False
 debug_mode: 1
-log_pretext: change_N
+log_pretext: test
 
 # Note: in the fogcom environment, the dict derived from config.yml is also used to sync some global variables:
 # n_slot - the current number of slots

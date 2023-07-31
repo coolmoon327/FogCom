@@ -18,7 +18,7 @@ class EnvWrapper:
         return action
 
     def step(self, action):
-        next_state, reward, terminal, _ = self.env.step(action.ravel())
+        next_state, reward, terminal = self.env.step(action.ravel())
         return next_state, reward, terminal
 
     def set_random_seed(self, seed):
