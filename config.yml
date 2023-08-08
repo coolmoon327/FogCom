@@ -8,7 +8,7 @@ N_m: 30
 
 slot_length: 0.1  # s
 block_size: 1 # MB
-result_size: 1e-3 # MB
+result_size: 0.001 # MB
 
 csp_num: 5
 vm_num: 100 # start from #0
@@ -21,7 +21,7 @@ follower_strategies_num: 4
 # 3 - CSP-preference
 alpha: 1.
 beta: 1.
-M: 1e4
+M: 10000
 
 tag_len: 1 # the length of test tags
 cand_num: 10  # the number of candidates roughly selected by the leader before DRL policy

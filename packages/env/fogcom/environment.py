@@ -76,6 +76,11 @@ class Environment(object):
         self.reset()
         
         # Env Info
+        self.env_name = 'FogComputing'
+        self.state_dim = 6 + config['tag_len'] + 4*config['cand_num']
+        self.action_dim = config['cand_num']
+        self.if_discrete = False
+        
         high = np.array(
             [20., 1000., 1000., 50., 50., 1.]
             +[config['N_m'] for _ in range(config['tag_len'])]
@@ -108,7 +113,7 @@ class Environment(object):
         self.drop_num = 0
         
         state = self.next_task()
-        return
+        return state
     
     def seed(self, seed):
         np.random.seed(seed)
@@ -173,7 +178,7 @@ class Environment(object):
         provider: Node = task.provider()
         
         # 4. get all candidates
-        self.raw_candidates = self.leader.search_candidates()
+        self.raw_candidates = self.leader.search_candidates(task)
         if provider in self.raw_candidates:
             task.set_storage(provider)
             self.execute_task()
@@ -193,12 +198,16 @@ class Environment(object):
         state.append(provider.strategy) # TODO: 暂时用作测试, 完善后改回 tag
         for node in self.raw_candidates:
             s = []
-            s.append(1. if provider.csp == node.csp else 0.)
-            s.append(node.p_vm)
-            s.append(min(node.bw, node.rd))
-            s.append(node.lt)
+            if node.is_Null():
+                s = [0., 1e6, 0., 1e3]
+            else:
+                s.append(1. if provider.csp == node.csp else 0.)
+                s.append(node.p_vm)
+                s.append(min(node.bw, node.rd))
+                s.append(node.lt)
             state += s
-    
+
+        state = np.array(state)
         return state
     
     def execute_task(self, task: Task):
@@ -215,13 +224,13 @@ class Environment(object):
         # log sw
         pass
     
-    def step(self, action):
+    def step(self, action: np.ndarray):
         task = self.new_tasks[self.task_index-1]    # notice that the task_index indicates the latter task after the current task (seen in next_task 2.)
         
         # 1. translate action 
         candidates = []
         for i in range(len(action)):    # 1 - selected, 0 - not selected
-            if action[i]:
+            if np.round(action[i]):
                 candidates.append(self.raw_candidates[i])
         
         # 2. execute action  (storage, duration, act_tasks)
@@ -243,4 +252,5 @@ class Environment(object):
         state = self.next_task()
         
         terminal = self.config['n_slot'] >= self.config['T']
-        return state, reward, terminal
+        info_dict = {}
+        return state, reward, terminal, info_dict

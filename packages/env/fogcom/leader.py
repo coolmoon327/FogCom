@@ -16,7 +16,13 @@ class Leader(object):
 
         for node in servers:
             for vmid in node.vms:
-                self.config['vm_database'][vmid].add_server(node.id)
+                self.config['vm_database'][vmid].add_server(node)
+        # make sure each vm has at least one host server
+        for vm in self.config['vm_database']:
+            if len(vm.get_servers()) == 0:
+                server_id = np.random.randint(0, self.config['N_m'])
+                server = self.servers[server_id]
+                vm.add_server(server)
     
     def assign_provider(self, task: Task):
         """Assign a proper provider for the input task.
@@ -67,19 +73,19 @@ class Leader(object):
         sorted_cand = sorted(candidates, key=lambda x: -priorities[candidates.index(x)])
         
         # padding
+        cand_num = self.config['cand_num']
         while len(sorted_cand) < cand_num:
             sorted_cand.append(NullNode())
         
         # cutting
-        cand_num = self.config['cand_num']
         if len(sorted_cand) > cand_num:
             sorted_cand = sorted_cand[0:cand_num]
         
         return sorted_cand
     
     def inform_candidates(self, task: Task, candidates: list):
-        provider = task.provider()
-        storage = provider.select_storage(candidates)
+        provider: Server = task.provider()
+        storage = provider.select_storage(task, candidates)
         if not storage:
             task.drop()
             return 0

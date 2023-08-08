@@ -54,6 +54,8 @@ class Server(Node):
             ans = - t_vm(task, self, storage, estimate)
         elif self.strategy == 3:
             ans = self.config['M'] if self.csp == storage.csp else 0
+        else:
+            ans = 0
         ans *= self.config['beta']
         return ans
     
@@ -72,6 +74,8 @@ class Server(Node):
         maxx = 0.
         target_s = None
         for node in candidates:
+            if node.is_Null():
+                continue
             obj = self.price(task, node) - self.cost(task, node) + self.bias(task, node)
             if obj > maxx:
                 maxx = obj

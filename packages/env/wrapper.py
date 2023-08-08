@@ -5,6 +5,10 @@ class EnvWrapper:
     def __init__(self, config={}):
         self.config = config
         self.env = Environment(config)
+        self.env_name = self.env.env_name
+        self.state_dim = self.env.state_dim
+        self.action_dim = self.env.action_dim
+        self.if_discrete = self.env.if_discrete
 
     def reset(self):
         state = self.env.reset()
@@ -18,8 +22,8 @@ class EnvWrapper:
         return action
 
     def step(self, action):
-        next_state, reward, terminal = self.env.step(action.ravel())
-        return next_state, reward, terminal
+        next_state, reward, terminal, info_dict = self.env.step(action.ravel())
+        return next_state, reward, terminal, info_dict
 
     def set_random_seed(self, seed):
         self.env.seed(seed)

@@ -1,0 +1,9 @@
+results/
+__pycache__/
+data/
+*.out
+*.pyc
+*.pkl
+
+!*.py
+!*.md

@@ -1,6 +1,6 @@
 import numpy as np
-from node import Node
-from task import *
+from .node import Node
+from .task import *
 
 class LinkCheck(object):
     def __init__(self):
@@ -14,14 +14,14 @@ class LinkCheck(object):
             b (Node)
 
         Returns:
-            dict: {"bw": bandwidth (MBps), "lt": latency (s)}
+            [bandwidth (MBps), latency (s)]
         """
         
         key1 = f"{a.id},{b.id}"
         key2 = f"{b.id},{a.id}"
-        if key1 in self.database.keys:
-            bw = self.database["bw"]
-            lt = self.database["lt"]
+        if key1 in self.database.keys():
+            bw = self.database[key1]["bw"]
+            lt = self.database[key1]["lt"]
         else:
             # no exist, create a new link
             bw = np.random.randint(1, 100) / 10.    # [0.1, 10.] MBps
@@ -33,7 +33,7 @@ class LinkCheck(object):
         bw = min(bw, a.bw)
         bw = min(bw, b.bw)
         lt += a.lt + b.lt
-        return {"bw": bw, "lt": lt}
+        return bw, lt
 
     def estimate(self, a: Node, b: Node):
         """Estimate the link state between node a and b.
@@ -43,11 +43,11 @@ class LinkCheck(object):
             b (Node)
 
         Returns:
-            dict: {"bw": bandwidth (MBps), "lt": latency (s)}
+            [bandwidth (MBps), latency (s)]
         """
         bw = min(a.bw, b.bw)
         lt = a.lt + b.lt
-        return {"bw": bw, "lt": lt}
+        return bw, lt
 
 ##### mapping
 

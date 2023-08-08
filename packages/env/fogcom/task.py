@@ -1,5 +1,6 @@
 import numpy as np
 import copy
+from .node import Node
 
 class VM(object):
     def __init__(self, id, size=-1.):
@@ -11,20 +12,20 @@ class VM(object):
 
         self.servers = []
         
-    def add_server(self, server_id):
-        """Record the ID of a new server storing this vm.
+    def add_server(self, server: Node):
+        """Record the server instance of a new server storing this vm.
 
         Args:
-            server_id (int): server ID
+            server (int): server instance
         """
-        if server_id not in self.servers:
-            self.servers.append(server_id)
+        if server not in self.servers:
+            self.servers.append(server)
     
     def get_servers(self):
-        """Get IDs of servers storing this vm.
+        """Get server instances storing this vm.
 
         Returns:
-            list[int]: the list of server IDs
+            list[Node]: the list of server instances
         """
         return copy.deepcopy(self.servers)
 
@@ -84,14 +85,14 @@ class Task(object):
         if hasattr(self, '_provider'):
             self._provider.occupied = False
     
-    def set_user(self, user):
+    def set_user(self, user: Node):
         self._user = user
     
-    def set_provider(self, provider):
+    def set_provider(self, provider: Node):
         self._provider = provider
         provider.occupied = True
     
-    def set_storage(self, storage):
+    def set_storage(self, storage: Node):
         # TODO: 使用更复杂的环境时(如 storage 需要考虑同时最多服务的对象数量), 需要修改此处
         self._storage = storage
     
