@@ -2,9 +2,9 @@
 
 seed: 88
 
-T: 100
-N_u: 100
-N_m: 30
+T: 10
+N_u: 10
+N_m: 3
 
 slot_length: 0.1  # s
 block_size: 1 # MB
@@ -30,9 +30,11 @@ cand_num: 10  # the number of candidates roughly selected by the leader before D
 
 batch_size: 512
 num_ep_train: 20 # number of episodes from all agents
-# max_ep_length: 10000 # maximum number of steps per episode
+break_step: 10000  # break training if 'total_step > break_step'
 max_slot_per_ep: 30
 
+gamma: 0.97  # discount factor of future rewards
+repeat_times: 16  # repeatedly update network using ReplayBuffer to keep critic's loss small
 penalty: -1000. # penalty for wrong selection (Null Node)
 
 # Miscellaneous

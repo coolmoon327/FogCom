@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 from torch.distributions.normal import Normal
+from ..env.wrapper import EnvWrapper
 
 
 class ActorPPO(nn.Module):
@@ -37,7 +38,7 @@ class ActorPPO(nn.Module):
 
     @staticmethod
     def convert_action_for_env(action: Tensor) -> Tensor:
-        return action.tanh()
+        return action
 
 
 class CriticPPO(nn.Module):
@@ -80,7 +81,7 @@ class Config:  # for on-policy
         self.learning_rate = 6e-5  # 2 ** -14 ~= 6e-5
         self.soft_update_tau = 5e-3  # 2 ** -8 ~= 5e-3
         self.batch_size = int(128)  # num of transitions sampled from replay buffer.
-        self.horizon_len = int(2000)  # collect horizon_len step while exploring, then update network
+        self.horizon_len = int(64)  # collect horizon_len step while exploring, then update network, default 2000
         self.buffer_size = None  # ReplayBuffer size. Empty the ReplayBuffer for on-policy.
         self.repeat_times = 8.0  # repeatedly update network using ReplayBuffer to keep critic's loss small
 
@@ -96,80 +97,14 @@ class Config:  # for on-policy
 
         self.eval_times = int(32)  # number of times that get episodic cumulative return
         self.eval_per_step = int(2e4)  # evaluate the agent per training steps
+        
+        '''Dict from config.yml'''
+        self.env_config = []
 
     def init_before_training(self):
         if self.cwd is None:  # set cwd (current working directory) for saving model
             self.cwd = f'./{self.env_name}_{self.agent_class.__name__[5:]}'
         os.makedirs(self.cwd, exist_ok=True)
-
-
-def get_gym_env_args(env, if_print: bool) -> dict:
-    """Get a dict ``env_args`` about a standard OpenAI gym env information.
-
-    param env: a standard OpenAI gym env
-    param if_print: [bool] print the dict about env information.
-    return: env_args [dict]
-
-    env_args = {
-        'env_name': env_name,       # [str] the environment name, such as XxxXxx-v0
-        'state_dim': state_dim,     # [int] the dimension of state
-        'action_dim': action_dim,   # [int] the dimension of action or the number of discrete action
-        'if_discrete': if_discrete, # [bool] action space is discrete or continuous
-    }
-    """
-    if {'unwrapped', 'observation_space', 'action_space', 'spec'}.issubset(dir(env)):  # isinstance(env, gym.Env):
-        env_name = env.unwrapped.spec.id
-
-        state_shape = env.observation_space.shape
-        state_dim = state_shape[0] if len(state_shape) == 1 else state_shape  # sometimes state_dim is a list
-
-        if_discrete = isinstance(env.action_space, gym.spaces.Discrete)
-        if if_discrete:  # make sure it is discrete action space
-            action_dim = env.action_space.n
-        elif isinstance(env.action_space, gym.spaces.Box):  # make sure it is continuous action space
-            action_dim = env.action_space.shape[0]
-            if any(env.action_space.high - 1):
-                print('WARNING: env.action_space.high', env.action_space.high)
-            if any(env.action_space.low + 1):
-                print('WARNING: env.action_space.low', env.action_space.low)
-        else:
-            raise RuntimeError('\n| Error in get_gym_env_info(). Please set these value manually:'
-                               '\n  `state_dim=int; action_dim=int; if_discrete=bool;`'
-                               '\n  And keep action_space in range (-1, 1).')
-    else:
-        env_name = env.env_name
-        state_dim = env.state_dim
-        action_dim = env.action_dim
-        if_discrete = env.if_discrete
-
-    env_args = {'env_name': env_name,
-                'state_dim': state_dim,
-                'action_dim': action_dim,
-                'if_discrete': if_discrete, }
-    if if_print:
-        env_args_str = repr(env_args).replace(',', f",\n{'':11}")
-        print(f"env_args = {env_args_str}")
-    return env_args
-
-
-def kwargs_filter(function, kwargs: dict) -> dict:
-    import inspect
-    sign = inspect.signature(function).parameters.values()
-    sign = {val.name for val in sign}
-    common_args = sign.intersection(kwargs.keys())
-    return {key: kwargs[key] for key in common_args}  # filtered kwargs
-
-
-def build_env(env_class=None, env_args=None):
-    if env_class.__module__ == 'gym.envs.registration':  # special rule
-        assert '0.18.0' <= gym.__version__ <= '0.25.2'  # pip3 install gym==0.24.0
-        env = env_class(id=env_args['env_name'])
-    else:
-        env = env_class(**kwargs_filter(env_class.__init__, env_args.copy()))
-    for attr_str in ('env_name', 'state_dim', 'action_dim', 'if_discrete'):
-        setattr(env, attr_str, env_args[attr_str])
-    return env
-
 
 class AgentBase:
     def __init__(self, net_dims: [int], state_dim: int, action_dim: int, gpu_id: int = 0, args: Config = Config()):
@@ -321,38 +256,14 @@ class AgentPPO(AgentBase):
         return advantages
 
 
-class PendulumEnv(gym.Wrapper):  # a demo of custom gym env
-    def __init__(self, gym_env_name=None):
-        gym.logger.set_level(40)  # Block warning
-        if gym_env_name is None:
-            gym_env_name = "Pendulum-v0" if gym.__version__ < '0.18.0' else "Pendulum-v1"
-        super().__init__(env=gym.make(gym_env_name))
-
-        '''the necessary env information when you design a custom env'''
-        self.env_name = gym_env_name  # the name of this env.
-        self.state_dim = self.observation_space.shape[0]  # feature number of state
-        self.action_dim = self.action_space.shape[0]  # feature number of action
-        self.if_discrete = False  # discrete action or continuous action
-
-    def reset(self) -> np.ndarray:  # reset the agent in env
-        return self.env.reset()
-
-    def step(self, action: np.ndarray) -> (np.ndarray, float, bool, dict):  # agent interacts in env
-        # OpenAI Pendulum env set its action space as (-2, +2). It is bad.
-        # We suggest that adjust action space to (-1, +1) when designing a custom env.
-        state, reward, done, info_dict = self.env.step(action * 2)
-        state = state.reshape(self.state_dim)
-        return state, float(reward), done, info_dict
-
-
 def train_agent(args: Config):
     args.init_before_training()
 
-    env = build_env(args.env_class, args.env_args)
+    env = args.env_class(args.env_config)
     agent = args.agent_class(args.net_dims, args.state_dim, args.action_dim, gpu_id=args.gpu_id, args=args)
     agent.last_state = env.reset()
 
-    evaluator = Evaluator(eval_env=build_env(args.env_class, args.env_args),
+    evaluator = Evaluator(eval_env=args.env_class(args.env_config),
                           eval_per_step=args.eval_per_step,
                           eval_times=args.eval_times,
                           cwd=args.cwd)
@@ -370,7 +281,7 @@ def train_agent(args: Config):
 
 
 def render_agent(env_class, env_args: dict, net_dims: [int], agent_class, actor_path: str, render_times: int = 8):
-    env = build_env(env_class, env_args)
+    env = args.env_class(args.env_config)
 
     state_dim = env_args['state_dim']
     action_dim = env_args['action_dim']
@@ -443,51 +354,21 @@ def get_rewards_and_steps(env, actor, if_render: bool = False) -> (float, int): 
             break
     return cumulative_returns, episode_steps + 1
 
-
-def train_ppo_for_pendulum():
+def train_ppo_for_fogcom(config: dict):
     agent_class = AgentPPO  # DRL algorithm name
-    env_class = PendulumEnv  # run a custom env: PendulumEnv, which based on OpenAI pendulum
+    env_class = EnvWrapper
+    env_instance = env_class(config)
     env_args = {
-        'env_name': 'Pendulum',  # Apply torque on the free end to swing a pendulum into an upright position
-        'state_dim': 3,  # the x-y coordinates of the pendulum's free end and its angular velocity.
-        'action_dim': 1,  # the torque applied to free end of the pendulum
-        'if_discrete': False  # continuous action space, symbols → direction, value → force
+        'env_name': env_instance.env_name,  # Apply torque on the free end to swing a pendulum into an upright position
+        'state_dim': env_instance.state_dim,  # the x-y coordinates of the pendulum's free end and its angular velocity.
+        'action_dim': env_instance.action_dim,  # the torque applied to free end of the pendulum
+        'if_discrete': env_instance.if_discrete  # continuous action space, symbols → direction, value → force
     }
-    get_gym_env_args(env=PendulumEnv(), if_print=True)  # return env_args
-
     args = Config(agent_class, env_class, env_args)  # see `config.py Arguments()` for hyperparameter explanation
-    args.break_step = int(2e5)  # break training if 'total_step > break_step'
+    args.env_config = config
+    args.break_step = config['break_step']  # break training if 'total_step > break_step'
     args.net_dims = (64, 32)  # the middle layer dimension of MultiLayer Perceptron
-    args.gamma = 0.97  # discount factor of future rewards
-    args.repeat_times = 16  # repeatedly update network using ReplayBuffer to keep critic's loss small
-
+    args.gamma = config['gamma']  # discount factor of future rewards
+    args.repeat_times = config['repeat_times']  # repeatedly update network using ReplayBuffer to keep critic's loss small
+    
     train_agent(args)
-
-
-def train_ppo_for_lunar_lander():
-    agent_class = AgentPPO  # DRL algorithm name
-    env_class = gym.make
-    env_args = {
-        'env_name': 'LunarLanderContinuous-v2',  # A lander learns to land on a landing pad
-        'state_dim': 8,  # coordinates xy, linear velocities xy, angle, angular velocity, two booleans
-        'action_dim': 2,  # fire main engine or side engine.
-        'if_discrete': False  # continuous action space, symbols → direction, value → force
-    }
-    get_gym_env_args(env=gym.make('LunarLanderContinuous-v2'), if_print=True)  # return env_args
-
-    args = Config(agent_class, env_class, env_args)  # see `config.py Arguments()` for hyperparameter explanation
-    args.break_step = int(4e5)  # break training if 'total_step > break_step'
-    args.net_dims = (64, 32)  # the middle layer dimension of MultiLayer Perceptron
-    args.repeat_times = 32  # repeatedly update network using ReplayBuffer to keep critic's loss small
-    args.lambda_entropy = 0.04  # the lambda of the policy entropy term in PPO
-
-    train_agent(args)
-    if input("| Press 'y' to load actor.pth and render:"):
-        actor_name = sorted([s for s in os.listdir(args.cwd) if s[-4:] == '.pth'])[-1]
-        actor_path = f"{args.cwd}/{actor_name}"
-        render_agent(env_class, env_args, args.net_dims, agent_class, actor_path)
-
-
-if __name__ == "__main__":
-    train_ppo_for_pendulum()
-    train_ppo_for_lunar_lander()

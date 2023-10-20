@@ -19,12 +19,11 @@ class Environment(object):
 
     ### Action Space
     
-    The action is a `ndarray` with shape `(cand_num,)`, in which each element can take values `{0, 1}` indicating its related node (based on the index) is selected.
-    
-    | Num | Action             |
-    |-----|--------------------|
-    | 0   | Deprecate the node |
-    | 1   | Select the node    |
+    The action is a `ndarray` with shape `(cand_num * 2,)`, in which each element will be mapped to `[0, 1]` indicating the drop rate or accept rate of its related node (based on the index).
+    For example: 
+        cand_num = 2, inputs = [10000., 0.1, 0., 0.21], 
+        after mapping: [1., 0., 0., 1.], 
+        action: node 0 is dropped and node 1 is accepted.
     
     **Note**: Sometimes there are less than `cand_num` valid candidates, and the rest are Null nodes (whose info is `(-1., -1., -1., -1.,)`). 
     If RL selects no valid node, it will be punished by the reward of `penalty`.
@@ -77,9 +76,6 @@ class Environment(object):
         
         # Env Info
         self.env_name = 'FogComputing'
-        self.state_dim = 6 + config['tag_len'] + 4*config['cand_num']
-        self.action_dim = config['cand_num']
-        self.if_discrete = False
         
         high = np.array(
             [20., 1000., 1000., 50., 50., 1.]
@@ -96,7 +92,16 @@ class Environment(object):
         )
         
         self.observation_space = spaces.Box(low, high, dtype=np.float32)
-        self.action_space = spaces.MultiBinary(config['cand_num'])
+        # self.action_space = spaces.MultiBinary(config['cand_num'])
+        act_low = np.array([-1e5 for _ in range(config['cand_num'] * 2)])
+        act_high = np.array([1e5 for _ in range(config['cand_num'] * 2)])
+        self.action_space = spaces.Box(act_low, act_high, dtype=np.float32)
+        
+        # self.state_dim = 6 + config['tag_len'] + 4*config['cand_num']
+        # self.action_dim = config['cand_num']
+        self.state_dim = 6 + config['tag_len'] + 4*config['cand_num']
+        self.action_dim = config['cand_num'] * 2
+        self.if_discrete = False  # discrete action or continuous action
     
     def reset(self):
         self.config['n_slot'] = 0   # used to synchronize the number of slots among different py files in this module
@@ -229,8 +234,13 @@ class Environment(object):
         
         # 1. translate action 
         candidates = []
-        for i in range(len(action)):    # 1 - selected, 0 - not selected
-            if np.round(action[i]):
+        # for i in range(len(action)):    # 1 - selected, 0 - not selected
+        #     if np.round(action[i]):
+        #         candidates.append(self.raw_candidates[i])
+        for i in range(int(len(action)/2)):
+            inputs = action[i*2:i*2+1]
+            is_selected = np.argmax(inputs) # TODO: 现在是取 max, 之后看情况改成根据概率来选
+            if is_selected:
                 candidates.append(self.raw_candidates[i])
         
         # 2. execute action  (storage, duration, act_tasks)
