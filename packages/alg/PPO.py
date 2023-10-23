@@ -97,7 +97,7 @@ class Config:  # for on-policy
         self.break_step = +np.inf  # break training if 'total_step > break_step'
 
         self.eval_times = int(4)  # number of times that get episodic cumulative return, default 32
-        self.eval_per_step = int(2e4)  # evaluate the agent per training steps, default 2e4
+        self.eval_per_step = int(1e3)  # evaluate the agent per training steps, default 2e4
         
         '''Dict from config.yml'''
         self.env_config = []
@@ -270,12 +270,12 @@ def explore_and_store_result(agent, env, horizon_len, result_list, lock):
 def train_agent(args: Config, threads_num, result_list, lock):
     args.init_before_training()
 
-    env = [args.env_class(args.env_config) for _ in range(threads_num)]
+    env = [args.env_class(args.env_config) for _ in range(max(threads_num,1))]
     agent = args.agent_class(args.net_dims, args.state_dim, args.action_dim, gpu_id=args.gpu_id, args=args)
     
     # 之前的 last_state 只是一个 state, 现在改成了数组, 与 env 一一对应
     agent.last_state.clear()
-    for i in range(threads_num):
+    for i in range(max(threads_num,1)):
         env[i].tag = i
         agent.last_state.append(env[i].reset())
 
@@ -283,39 +283,39 @@ def train_agent(args: Config, threads_num, result_list, lock):
                           eval_per_step=args.eval_per_step,
                           eval_times=args.eval_times,
                           cwd=args.cwd)
-    torch.set_grad_enabled(False)
-    
-    # while True:  # start training
-    #     buffer_items = agent.explore_env(env, args.horizon_len)
+    torch.set_grad_enabled(False)          
     
     while True:  # start training
-        # 创建 ProcessPoolExecutor, 指定进程数量（这里使用了 threads_num 个进程）
-        with concurrent.futures.ProcessPoolExecutor(max_workers=threads_num) as executor:
-            # print("开始探索")
-            result_list[:] = []
-            
-            # 使用 executor 并行执行 explore_env 函数
-            futures = [executor.submit(explore_and_store_result, agent, env[i], args.horizon_len, result_list, lock) for i in range(threads_num)]
+        if threads_num == 0:
+            buffer_items = agent.explore_env(env[0], args.horizon_len)
+        else:
+            # 创建 ProcessPoolExecutor, 指定进程数量（这里使用了 threads_num 个进程）
+            with concurrent.futures.ProcessPoolExecutor(max_workers=threads_num) as executor:
+                # print("开始探索")
+                result_list[:] = []
+                
+                # 使用 executor 并行执行 explore_env 函数
+                futures = [executor.submit(explore_and_store_result, agent, env[i], args.horizon_len, result_list, lock) for i in range(threads_num)]
 
-            concurrent.futures.wait(futures)
+                concurrent.futures.wait(futures)
+                
+                for future in futures:
+                    future.result()
+                
+                # 获取每个进程的结果
+                N = len(result_list[0]) # number of tensors
+                buffer_items = [None] * N
+                for i in range(5):
+                    buffer_items[i] = torch.cat([result[i] for result in result_list], dim=0)
+                    # print(buffer_items[i].size())
             
-            for future in futures:
-                future.result()
-            
-            # 获取每个进程的结果
-            N = len(result_list[0]) # number of tensors
-            buffer_items = [None] * N
-            for i in range(5):
-                buffer_items[i] = torch.cat([result[i] for result in result_list], dim=0)
-                # print(buffer_items[i].size())
-            
-            torch.set_grad_enabled(True)
-            logging_tuple = agent.update_net(buffer_items)
-            torch.set_grad_enabled(False)
+        torch.set_grad_enabled(True)
+        logging_tuple = agent.update_net(buffer_items)
+        torch.set_grad_enabled(False)
 
-            evaluator.evaluate_and_save(agent.act, args.horizon_len * threads_num, logging_tuple)
-            if (evaluator.total_step > args.break_step) or os.path.exists(f"{args.cwd}/stop"):
-                break  # stop training when reach `break_step` or `mkdir cwd/stop`
+        evaluator.evaluate_and_save(agent.act, args.horizon_len * threads_num, logging_tuple)
+        if (evaluator.total_step > args.break_step) or os.path.exists(f"{args.cwd}/stop"):
+            break  # stop training when reach `break_step` or `mkdir cwd/stop`
 
 
 def render_agent(env_class, env_args: dict, net_dims: [int], agent_class, actor_path: str, render_times: int = 8):

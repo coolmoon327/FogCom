@@ -220,7 +220,7 @@ class Environment(object):
         storage = task.storage()
         
         # set task state
-        real_duration = delta_t(task, provider, storage, False)
+        real_duration = provider.delta_t(task, storage, False)
         task.set_duration(real_duration)
         
         # maintain active tasks list
@@ -241,7 +241,7 @@ class Environment(object):
         #     if np.round(action[i]):
         #         candidates.append(self.raw_candidates[i])
         for i in range(int(len(action)/2)):
-            inputs = action[i*2:i*2+1]
+            inputs = action[i*2:i*2+2]
             is_selected = np.argmax(inputs) # TODO: 现在是取 max, 之后看情况改成根据概率来选
             if is_selected:
                 candidates.append(self.raw_candidates[i])
@@ -263,7 +263,7 @@ class Environment(object):
             provider: Node = task.provider()
             storage: Node = task.storage()
             # Reward = - Alpha * t_vm - (p_link * t_vm + p_s * s * t_vm) - p_vm * t_vm
-            reward = - (task.alpha + provider.p_link + provider.p_s * task.s + storage.p_vm) * t_vm(task, provider, storage, False) 
+            reward = - (task.alpha + provider.p_link + provider.p_s * task.s + storage.p_vm) * provider.t_vm(task, storage, False) 
         
         # T.append(time.time())
         

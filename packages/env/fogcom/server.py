@@ -61,7 +61,7 @@ class Server(Node):
     
     def cost(self, task: Task, storage: Node):
         estimate = self.is_estimate(storage)
-        ans = self.cost_task(task, self, storage, estimate)
+        ans = self.cost_task(task, storage, estimate)
         return ans
     
     def price(self, task: Task, storage: Node):
@@ -102,11 +102,11 @@ class Server(Node):
         result_size = self.config["result_size"]
         bw_fd, lt_fd = 0., 0.
         if estimate:
-            bw_uf, lt_uf = self.config['link_check'].estimate(task.user, self)
+            bw_uf, lt_uf = self.config['link_check'].estimate(task.user(), self)
             if storage:
                 bw_fd, lt_fd = self.config['link_check'].estimate(self, storage)
         else:
-            bw_uf, lt_uf = self.config['link_check'].check(task.user, self)
+            bw_uf, lt_uf = self.config['link_check'].check(task.user(), self)
             if storage:
                 bw_fd, lt_fd = self.config['link_check'].check(self, storage)
         p_c = self.p_c
@@ -127,11 +127,11 @@ class Server(Node):
         result_size = self.config["result_size"]
         bw_fd, lt_fd = 0., 0.
         if estimate:
-            bw_uf, lt_uf = self.config['link_check'].estimate(task.user, self)
+            bw_uf, lt_uf = self.config['link_check'].estimate(task.user(), self)
             if storage:
                 bw_fd, lt_fd = self.config['link_check'].estimate(self, storage)
         else:
-            bw_uf, lt_uf = self.config['link_check'].check(task.user, self)
+            bw_uf, lt_uf = self.config['link_check'].check(task.user(), self)
             if storage:
                 bw_fd, lt_fd = self.config['link_check'].check(self, storage)
                 
