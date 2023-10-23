@@ -230,6 +230,9 @@ class Environment(object):
         pass
     
     def step(self, action: np.ndarray):
+        # T = []
+        # T.append(time.time())
+        
         task = self.new_tasks[self.task_index-1]    # notice that the task_index indicates the latter task after the current task (seen in next_task 2.)
         
         # 1. translate action 
@@ -243,23 +246,36 @@ class Environment(object):
             if is_selected:
                 candidates.append(self.raw_candidates[i])
         
+        # T.append(time.time())
+        
         # 2. execute action  (storage, duration, act_tasks)
         ret = self.leader.inform_candidates(task, candidates)
+        
+        # T.append(time.time())
+        
         if not ret:
             self.drop_num += 1
             reward = self.config['penalty']
         
         else:
             self.execute_task(task)
-            
             # 3. calculate reward
             provider: Node = task.provider()
             storage: Node = task.storage()
             # Reward = - Alpha * t_vm - (p_link * t_vm + p_s * s * t_vm) - p_vm * t_vm
             reward = - (task.alpha + provider.p_link + provider.p_s * task.s + storage.p_vm) * t_vm(task, provider, storage, False) 
         
+        # T.append(time.time())
+        
         # 4. get next task (state)
         state = self.next_task()
+
+        # T.append(time.time())
+        # print("=================")
+        # for i in range(len(T)-1):
+        #     print(i, ":", T[i+1]-T[i])
+        # print("=================")
+        # time.sleep(5)
         
         terminal = self.config['n_slot'] >= self.config['T']
         info_dict = {}

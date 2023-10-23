@@ -1,4 +1,5 @@
 import numpy as np
+import time
 from .node import Node
 from .task import *
 
@@ -52,103 +53,51 @@ class LinkCheck(object):
 ##### mapping
 
 def R(config, sid):
-    vmid = sid
-    return vmid
+    return sid
 
 ##### cost
 
-def cost_task(task: Task, provider: Node, storage: Node = None, estimate=True):
-    ans = cost_task_1(task, provider, storage, estimate)
-    if storage:
-        ans += cost_task_2(task, provider, storage, estimate)
+def cost_task(p_c, p_link, p_s, p_vm, task_s, task_w, c_p, rd_d, block_size, result_size, bw_uf, lt_uf, bw_fd, lt_fd):
+    c1 = cost_task_1(p_c, p_link, p_s, task_s, task_w, c_p, rd_d, block_size, result_size, bw_uf, lt_uf, bw_fd, lt_fd)
+    c2 = cost_task_2(p_vm, task_w, c_p, rd_d, block_size, bw_fd, lt_fd)
+    return c1 + c2
+
+def cost_task_1(p_c, p_link, p_s, task_s, task_w, c_p, rd_d, block_size, result_size, bw_uf, lt_uf, bw_fd, lt_fd):
+    ans = p_c * task_w +\
+            p_link * (t_u(task_s, bw_uf, lt_uf) + t_vm(block_size, rd_d, bw_fd, lt_fd) + t_d(result_size, bw_uf, lt_uf)) +\
+            p_s * task_s * (t_vm(block_size, rd_d, bw_fd, lt_fd) + t_p(task_w, c_p)) +\
+            p_s * block_size * t_p(task_w, c_p) +\
+            p_s * result_size * t_d(result_size, bw_uf, lt_uf)
     return ans
 
-def cost_task_1(task: Task, provider: Node, storage: Node = None, estimate=True):
-    conf = provider.config
-    vmid = R(conf, task.sid)
-    vm: VM = conf['vm_database'][vmid]
-    if storage:
-        ans = provider.p_c * task.w +\
-                provider.p_link * (t_u(task, provider, estimate) + t_vm(task, provider, storage, estimate) + t_d(task, provider, estimate)) +\
-                provider.p_s * task.s * (t_vm(task, provider, storage, estimate) + t_p(task, provider)) +\
-                provider.p_s * vm.block_size * t_p(task, provider) +\
-                provider.p_s * conf['result_size'] * t_d(task, provider, estimate)
-    else:
-        # used by the leader to choose a provider
-        ans = provider.p_c * task.w +\
-                provider.p_link * (t_u(task, provider, estimate) + t_d(task, provider, estimate)) +\
-                provider.p_s * task.s * t_p(task, provider) +\
-                provider.p_s * vm.block_size * t_p(task, provider) +\
-                provider.p_s * conf['result_size'] * t_d(task, provider, estimate)
-    return ans
-
-def cost_task_2(task: Task, provider: Node, storage: Node, estimate=True):
+def cost_task_2(p_vm, task_w, c_p, rd_d, block_size, bw_fd, lt_fd):
     # Assume the storage usage price is still t_p when provider == storage
-    ans = storage.p_vm * (t_vm(task, provider, storage, estimate) + t_p(task, provider))
+    ans = p_vm * (t_vm(block_size, rd_d, bw_fd, lt_fd) + t_p(task_w, c_p))
     return ans
 
 ##### time
 
-def delta_t(task: Task, provider: Node, storage: Node = None, estimate=True):
-    ans = t_u(task, provider, estimate) + t_p(task, provider) + t_d(task, provider, estimate)
-    if storage:
-        ans += t_vm(task, provider, storage, estimate) 
-    return ans
+def delta_t(task_s, task_w, c_p, rd_d, block_size, result_size, bw_uf, lt_uf, bw_fd, lt_fd):
+    return t_u(task_s, bw_uf, lt_uf) + t_p(task_w, c_p) + t_d(result_size, bw_uf, lt_uf) + t_vm(block_size, rd_d, bw_fd, lt_fd) 
 
-def t_u(task: Task, provider: Node, estimate=True):
-    if task.user() == provider:
+def t_u(task_s: float, bw_uf: float, lt_uf: float):
+    # 在调用的地方判断两个节点是否是一个 -> 0., 或者传入的链路 bw 为 0
+    if bw_uf < 1e6:
         return 0.
-    
-    conf = provider.config
-    user = task.user()
-    if estimate:
-        bw_uf, lt_uf = conf['link_check'].estimate(user, provider)
-    else:
-        bw_uf, lt_uf = conf['link_check'].check(user, provider)
-    ans = task.s / bw_uf + lt_uf
-    return ans
+    return task_s / bw_uf + lt_uf
 
-def t_vm(task: Task, provider: Node, storage: Node, estimate=True):
-    if provider == storage:
+def t_vm(block_size: float, rd_d: float, bw_fd: float, lt_fd: float):
+    if bw_fd < 1e6 or rd_d < 1e6:
         return 0.
+    return block_size / min(bw_fd, rd_d) + lt_fd
 
-    conf = provider.config
-    vmid = R(conf, task.sid)
-    vm: VM = conf['vm_database'][vmid]
-    if estimate:
-        bw_fd, lt_fd = conf['link_check'].estimate(provider, storage)
-    else:
-        bw_fd, lt_fd = conf['link_check'].check(provider, storage)
-    rd_d = storage.rd
-    ans = vm.block_size / min(bw_fd, rd_d) + lt_fd
-    return ans
+def t_p(task_w: float, c_p: float):
+    if c_p < 1e6:
+        return 1e6  # means this provider has no free computing resource
+    return task_w / c_p
 
-def t_p(task: Task, provider: Node):
-    ans = task.w / provider.c
-    return ans
-
-def t_d(task: Task, provider: Node, estimate=True):
-    if task.user() == provider:
+def t_d(result_size: float, bw_uf: float, lt_uf: float):
+    if bw_uf < 1e6:
         return 0.
-    
-    conf = provider.config
-    user = task.user()
-    if estimate:
-        bw_uf, lt_uf = conf['link_check'].estimate(user, provider)
-    else:
-        bw_uf, lt_uf = conf['link_check'].check(user, provider)
-    ans = conf['result_size'] / bw_uf + lt_uf
-    return ans
-
-##### social welfare
-
-def social_welfare(task: Task, provider: Node, storage: Node = None, estimate=True):
-    u = utility(task, provider, storage, estimate)
-    c = cost_task(task, provider, storage, estimate)
-    ans = u - c
-    return ans
-
-def utility(task: Task, provider: Node, storage: Node = None, estimate=True):
-    dt = delta_t(task, provider, storage, estimate)
-    ans = task.value(dt)
+    ans = result_size / bw_uf + lt_uf
     return ans

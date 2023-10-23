@@ -49,9 +49,9 @@ class Server(Node):
         if self.strategy == 0:
             ans = 0
         elif self.strategy == 1:
-            ans = t_vm(task, self, storage, estimate)
+            ans = self.t_vm(task, storage, estimate)
         elif self.strategy == 2:
-            ans = - t_vm(task, self, storage, estimate)
+            ans = - self.t_vm(task, storage, estimate)
         elif self.strategy == 3:
             ans = self.config['M'] if self.csp == storage.csp else 0
         else:
@@ -61,12 +61,12 @@ class Server(Node):
     
     def cost(self, task: Task, storage: Node):
         estimate = self.is_estimate(storage)
-        ans = cost_task(task, self, storage, estimate)
+        ans = self.cost_task(task, self, storage, estimate)
         return ans
     
     def price(self, task: Task, storage: Node):
         estimate = self.is_estimate(storage)
-        dt = delta_t(task, self, storage, estimate)
+        dt = self.delta_t(task, storage, estimate)
         ans = self.config['alpha'] * task.value(dt)
         return ans
     
@@ -82,3 +82,57 @@ class Server(Node):
                 target_s = node
         
         return target_s
+    
+    def t_vm(self, task, storage, estimate):
+        rd_d = storage.rd
+        block_size = self.config["block_size"]
+        if estimate:
+            bw_fd, lt_fd = self.config['link_check'].estimate(self, storage)
+        else:
+            bw_fd, lt_fd = self.config['link_check'].check(self, storage)
+            
+        return t_vm(block_size, rd_d, bw_fd, lt_fd)
+
+    def cost_task(self, task, storage, estimate):
+        task_s = task.s
+        task_w = task.w
+        c_p = self.c
+        rd_d = storage.rd
+        block_size = self.config["block_size"]
+        result_size = self.config["result_size"]
+        bw_fd, lt_fd = 0., 0.
+        if estimate:
+            bw_uf, lt_uf = self.config['link_check'].estimate(task.user, self)
+            if storage:
+                bw_fd, lt_fd = self.config['link_check'].estimate(self, storage)
+        else:
+            bw_uf, lt_uf = self.config['link_check'].check(task.user, self)
+            if storage:
+                bw_fd, lt_fd = self.config['link_check'].check(self, storage)
+        p_c = self.p_c
+        p_link = self.p_link
+        p_s = self.p_s
+        p_vm = 0.
+        if storage:
+            p_vm = storage.p_vm
+        
+        return cost_task(p_c, p_link, p_s, p_vm, task_s, task_w, c_p, rd_d, block_size, result_size, bw_uf, lt_uf, bw_fd, lt_fd)
+    
+    def delta_t(self, task, storage, estimate):
+        task_s = task.s
+        task_w = task.w
+        c_p = self.c
+        rd_d = storage.rd
+        block_size = self.config["block_size"]
+        result_size = self.config["result_size"]
+        bw_fd, lt_fd = 0., 0.
+        if estimate:
+            bw_uf, lt_uf = self.config['link_check'].estimate(task.user, self)
+            if storage:
+                bw_fd, lt_fd = self.config['link_check'].estimate(self, storage)
+        else:
+            bw_uf, lt_uf = self.config['link_check'].check(task.user, self)
+            if storage:
+                bw_fd, lt_fd = self.config['link_check'].check(self, storage)
+                
+        return delta_t(task_s, task_w, c_p, rd_d, block_size, result_size, bw_uf, lt_uf, bw_fd, lt_fd)

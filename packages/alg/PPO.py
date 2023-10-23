@@ -6,8 +6,9 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 from torch.distributions.normal import Normal
+import concurrent.futures
+import threading
 from ..env.wrapper import EnvWrapper
-
 
 class ActorPPO(nn.Module):
     def __init__(self, dims: [int], state_dim: int, action_dim: int):
@@ -80,10 +81,10 @@ class Config:  # for on-policy
         self.net_dims = (64, 32)  # the middle layer dimension of MLP (MultiLayer Perceptron)
         self.learning_rate = 6e-5  # 2 ** -14 ~= 6e-5
         self.soft_update_tau = 5e-3  # 2 ** -8 ~= 5e-3
-        self.batch_size = int(128)  # num of transitions sampled from replay buffer.
-        self.horizon_len = int(64)  # collect horizon_len step while exploring, then update network, default 2000
+        self.batch_size = int(128)  # num of transitions sampled from replay buffer, default 128
+        self.horizon_len = int(20)  # collect horizon_len step while exploring, then update network, default 2000
         self.buffer_size = None  # ReplayBuffer size. Empty the ReplayBuffer for on-policy.
-        self.repeat_times = 8.0  # repeatedly update network using ReplayBuffer to keep critic's loss small
+        self.repeat_times = 8.0  # repeatedly update network using ReplayBuffer to keep critic's loss small, default 8.0
 
         '''Arguments for device'''
         self.gpu_id = int(0)  # `int` means the ID of single GPU, -1 means CPU
@@ -95,8 +96,8 @@ class Config:  # for on-policy
         self.if_remove = True  # remove the cwd folder? (True, False, None:ask me)
         self.break_step = +np.inf  # break training if 'total_step > break_step'
 
-        self.eval_times = int(32)  # number of times that get episodic cumulative return
-        self.eval_per_step = int(2e4)  # evaluate the agent per training steps
+        self.eval_times = int(4)  # number of times that get episodic cumulative return, default 32
+        self.eval_per_step = int(2e4)  # evaluate the agent per training steps, default 2e4
         
         '''Dict from config.yml'''
         self.env_config = []
@@ -119,7 +120,7 @@ class AgentBase:
         self.if_off_policy = args.if_off_policy
         self.soft_update_tau = args.soft_update_tau
 
-        self.last_state = None  # save the last state of the trajectory for training. `last_state.shape == (state_dim)`
+        self.last_state = []  # save the last state of the trajectory for training. `last_state.shape == (thread_num, state_dim)`
         self.device = torch.device(f"cuda:{gpu_id}" if (torch.cuda.is_available() and (gpu_id >= 0)) else "cpu")
 
         act_class = getattr(self, "act_class", None)
@@ -166,7 +167,7 @@ class AgentPPO(AgentBase):
         rewards = torch.zeros(horizon_len, dtype=torch.float32).to(self.device)
         dones = torch.zeros(horizon_len, dtype=torch.bool).to(self.device)
 
-        ary_state = self.last_state
+        ary_state = self.last_state[env.tag]
 
         get_action = self.act.get_action
         convert = self.act.convert_action_for_env
@@ -185,7 +186,7 @@ class AgentPPO(AgentBase):
             rewards[i] = reward
             dones[i] = done
 
-        self.last_state = ary_state
+        self.last_state[env.tag] = ary_state
         rewards = (rewards * self.reward_scale).unsqueeze(1)
         undones = (1 - dones.type(torch.float32)).unsqueeze(1)
         return states, actions, logprobs, rewards, undones
@@ -210,7 +211,9 @@ class AgentPPO(AgentBase):
         '''update network'''
         obj_critics = 0.0
         obj_actors = 0.0
-
+        
+        # print("开始训练")
+        
         update_times = int(buffer_size * self.repeat_times / self.batch_size)
         assert update_times >= 1
         for _ in range(update_times):
@@ -245,7 +248,9 @@ class AgentPPO(AgentBase):
         masks = undones * self.gamma
         horizon_len = rewards.shape[0]
 
-        next_state = torch.tensor(self.last_state, dtype=torch.float32).to(self.device)
+        # next_state = torch.tensor(self.last_state, dtype=torch.float32).to(self.device)
+        # TODO: 因为改了 self.last_state, 不知道是否对这里有什么影响
+        next_state = torch.tensor(self.last_state[0], dtype=torch.float32).to(self.device)
         next_value = self.cri(next_state.unsqueeze(0)).detach().squeeze(1).squeeze(0)
 
         advantage = 0  # last_gae_lambda
@@ -255,29 +260,62 @@ class AgentPPO(AgentBase):
             next_value = values[t]
         return advantages
 
+def explore_and_store_result(agent, env, horizon_len, result_list, lock):
+    # 在 explore_env 中执行并将结果添加到共享列表中
+    # print("Start exploring env", env.tag)
+    buffer_items = agent.explore_env(env, horizon_len)
+    with lock:
+        result_list.append([item.detach() for item in buffer_items])
 
-def train_agent(args: Config):
+def train_agent(args: Config, threads_num, result_list, lock):
     args.init_before_training()
 
-    env = args.env_class(args.env_config)
+    env = [args.env_class(args.env_config) for _ in range(threads_num)]
     agent = args.agent_class(args.net_dims, args.state_dim, args.action_dim, gpu_id=args.gpu_id, args=args)
-    agent.last_state = env.reset()
+    
+    # 之前的 last_state 只是一个 state, 现在改成了数组, 与 env 一一对应
+    agent.last_state.clear()
+    for i in range(threads_num):
+        env[i].tag = i
+        agent.last_state.append(env[i].reset())
 
     evaluator = Evaluator(eval_env=args.env_class(args.env_config),
                           eval_per_step=args.eval_per_step,
                           eval_times=args.eval_times,
                           cwd=args.cwd)
     torch.set_grad_enabled(False)
+    
+    # while True:  # start training
+    #     buffer_items = agent.explore_env(env, args.horizon_len)
+    
     while True:  # start training
-        buffer_items = agent.explore_env(env, args.horizon_len)
+        # 创建 ProcessPoolExecutor, 指定进程数量（这里使用了 threads_num 个进程）
+        with concurrent.futures.ProcessPoolExecutor(max_workers=threads_num) as executor:
+            # print("开始探索")
+            result_list[:] = []
+            
+            # 使用 executor 并行执行 explore_env 函数
+            futures = [executor.submit(explore_and_store_result, agent, env[i], args.horizon_len, result_list, lock) for i in range(threads_num)]
 
-        torch.set_grad_enabled(True)
-        logging_tuple = agent.update_net(buffer_items)
-        torch.set_grad_enabled(False)
+            concurrent.futures.wait(futures)
+            
+            for future in futures:
+                future.result()
+            
+            # 获取每个进程的结果
+            N = len(result_list[0]) # number of tensors
+            buffer_items = [None] * N
+            for i in range(5):
+                buffer_items[i] = torch.cat([result[i] for result in result_list], dim=0)
+                # print(buffer_items[i].size())
+            
+            torch.set_grad_enabled(True)
+            logging_tuple = agent.update_net(buffer_items)
+            torch.set_grad_enabled(False)
 
-        evaluator.evaluate_and_save(agent.act, args.horizon_len, logging_tuple)
-        if (evaluator.total_step > args.break_step) or os.path.exists(f"{args.cwd}/stop"):
-            break  # stop training when reach `break_step` or `mkdir cwd/stop`
+            evaluator.evaluate_and_save(agent.act, args.horizon_len * threads_num, logging_tuple)
+            if (evaluator.total_step > args.break_step) or os.path.exists(f"{args.cwd}/stop"):
+                break  # stop training when reach `break_step` or `mkdir cwd/stop`
 
 
 def render_agent(env_class, env_args: dict, net_dims: [int], agent_class, actor_path: str, render_times: int = 8):
@@ -315,18 +353,22 @@ class Evaluator:
               f"\n| `objA`: Objective of Actor network. It is the average Q value of the critic network."
               f"\n| {'step':>8}  {'time':>8}  | {'avgR':>8}  {'stdR':>6}  {'avgS':>6}  | {'objC':>8}  {'objA':>8}")
 
-    def evaluate_and_save(self, actor, horizon_len: int, logging_tuple: tuple):
-        self.total_step += horizon_len
+    def evaluate_and_save(self, actor, step_num: int, logging_tuple: tuple):
+        self.total_step += step_num
         if self.eval_step + self.eval_per_step > self.total_step:
             return
         self.eval_step = self.total_step
 
+        # print("开始测试")
+        
         rewards_steps_ary = [get_rewards_and_steps(self.env_eval, actor) for _ in range(self.eval_times)]
         rewards_steps_ary = np.array(rewards_steps_ary, dtype=np.float32)
         avg_r = rewards_steps_ary[:, 0].mean()  # average of cumulative rewards
         std_r = rewards_steps_ary[:, 0].std()  # std of cumulative rewards
         avg_s = rewards_steps_ary[:, 1].mean()  # average of steps in an episode
 
+        # print("结束测试")
+        
         used_time = time.time() - self.start_time
         self.recorder.append((self.total_step, used_time, avg_r))
 
@@ -341,7 +383,7 @@ def get_rewards_and_steps(env, actor, if_render: bool = False) -> (float, int): 
     state = env.reset()
     episode_steps = 0
     cumulative_returns = 0.0  # sum of rewards in an episode
-    for episode_steps in range(12345):
+    for episode_steps in range(10): # TODO: 一个 episode 太长了, 因而在训练过程中调整了这里, 实验过程中需要调得比较大
         tensor_state = torch.as_tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
         tensor_action = actor(tensor_state)
         action = tensor_action.detach().cpu().numpy()[0]  # not need detach(), because using torch.no_grad() outside
@@ -354,7 +396,7 @@ def get_rewards_and_steps(env, actor, if_render: bool = False) -> (float, int): 
             break
     return cumulative_returns, episode_steps + 1
 
-def train_ppo_for_fogcom(config: dict):
+def train_ppo_for_fogcom(config, threads_num, result_list, lock):
     agent_class = AgentPPO  # DRL algorithm name
     env_class = EnvWrapper
     env_instance = env_class(config)
@@ -371,4 +413,4 @@ def train_ppo_for_fogcom(config: dict):
     args.gamma = config['gamma']  # discount factor of future rewards
     args.repeat_times = config['repeat_times']  # repeatedly update network using ReplayBuffer to keep critic's loss small
     
-    train_agent(args)
+    train_agent(args, threads_num, result_list, lock)

@@ -2,9 +2,9 @@
 
 seed: 88
 
-T: 10
-N_u: 10
-N_m: 3
+T: 1000
+N_u: 1000
+N_m: 50
 
 slot_length: 0.1  # s
 block_size: 1 # MB

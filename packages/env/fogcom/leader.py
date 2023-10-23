@@ -1,4 +1,5 @@
 import numpy as np
+import time
 from .user import *
 from .server import *
 from .task import *
@@ -33,6 +34,8 @@ class Leader(object):
         Returns:
             int: 0 for false, 1 for success
         """
+        # T=[]
+        # T.append(time.time())
         # choose a provider by maximizing the estimated SW
         maxx = 0.
         target_p = None
@@ -47,11 +50,17 @@ class Leader(object):
             vm: VM = self.config['vm_database'][vmid]
             if task.s + vm.block_size > node.S:
                 continue
-            
-            es_sw = social_welfare(task, node)
+            # T.append(time.time())
+            es_sw = self.social_welfare(task, node)  # TODO: 用掉了 0.01 s 左右
+            # T.append(time.time())
             if es_sw > maxx:
                 maxx = es_sw
                 target_p = node
+        
+        # print("=================")
+        # for i in range(len(T)-1):
+        #     print(i, ":", T[i+1]-T[i])
+        # print("=================")
         
         if target_p and cand_exist:
             task.set_provider(target_p)
@@ -65,7 +74,7 @@ class Leader(object):
         candidates = self.config['vm_database'][task.sid].get_servers()
         priorities = []
         for node in candidates:
-            es_sw = social_welfare(task, provider, node)
+            es_sw = self.social_welfare(task, provider, node)
             priorities.append(es_sw)
         
         # sort
@@ -92,3 +101,38 @@ class Leader(object):
         
         task.set_storage(storage)
         return 1
+
+    def social_welfare(self, task: Task, provider: Node, storage: Node = None, estimate=True):
+        user = task.user()
+        task_s = task.s
+        task_w = task.w
+        c_p = provider.c
+        block_size = self.config["block_size"]
+        result_size = self.config["result_size"]
+        bw_fd, lt_fd = 0., 0.
+    
+        # TODO: 可能这部分也比较耗时, 测一下
+        if estimate:
+            bw_uf, lt_uf = self.config['link_check'].estimate(user, provider)
+            if storage:
+                bw_fd, lt_fd = self.config['link_check'].estimate(provider, storage)
+        else:
+            bw_uf, lt_uf = self.config['link_check'].check(user, provider)
+            if storage:
+                bw_fd, lt_fd = self.config['link_check'].check(provider, storage)
+        
+        p_c = provider.p_c
+        p_link = provider.p_link
+        p_s = provider.p_s
+        p_vm = 0.
+        rd_d = 0.
+        if storage:
+            p_vm = storage.p_vm
+            rd_d = storage.rd
+        
+        dt = delta_t(task_s, task_w, c_p, rd_d, block_size, result_size, bw_uf, lt_uf, bw_fd, lt_fd)
+        u = task.value(dt)
+        c = cost_task(p_c, p_link, p_s, p_vm, task_s, task_w, c_p, rd_d, block_size, result_size, bw_uf, lt_uf, bw_fd, lt_fd)
+        
+        return u - c
+        

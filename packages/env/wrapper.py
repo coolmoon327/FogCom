@@ -3,6 +3,7 @@ import numpy as np
 
 class EnvWrapper:
     def __init__(self, config={}):
+        self.tag = -1   # set from outside
         self.config = config
         self.env = Environment(config)
         self.env_name = self.env.env_name
