@@ -82,22 +82,22 @@ def delta_t(task_s, task_w, c_p, rd_d, block_size, result_size, bw_uf, lt_uf, bw
 
 def t_u(task_s: float, bw_uf: float, lt_uf: float):
     # 在调用的地方判断两个节点是否是一个 -> 0., 或者传入的链路 bw 为 0
-    if bw_uf < 1e6:
+    if bw_uf < 1e-6:
         return 0.
     return task_s / bw_uf + lt_uf
 
 def t_vm(block_size: float, rd_d: float, bw_fd: float, lt_fd: float):
-    if bw_fd < 1e6 or rd_d < 1e6:
+    if bw_fd < 1e-6 or rd_d < 1e-6:
         return 0.
     return block_size / min(bw_fd, rd_d) + lt_fd
 
 def t_p(task_w: float, c_p: float):
-    if c_p < 1e6:
+    if c_p < 1e-6:
         return 1e6  # means this provider has no free computing resource
     return task_w / c_p
 
 def t_d(result_size: float, bw_uf: float, lt_uf: float):
-    if bw_uf < 1e6:
+    if bw_uf < 1e-6:
         return 0.
     ans = result_size / bw_uf + lt_uf
     return ans

@@ -30,7 +30,7 @@ cand_num: 10  # the number of candidates roughly selected by the leader before D
 
 batch_size: 512
 num_ep_train: 20 # number of episodes from all agents
-break_step: 10000  # break training if 'total_step > break_step'
+break_step: 1000000  # break training if 'total_step > break_step'
 max_slot_per_ep: 30
 
 gamma: 0.97  # discount factor of future rewards

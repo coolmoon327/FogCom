@@ -10,7 +10,7 @@ if __name__ == "__main__":
     manager = multiprocessing.Manager()
     result_list = manager.list()
     lock = manager.Lock()
-    threads_num = 10
+    threads_num = 16
     
     # test_env(config)
     train_ppo_for_fogcom(config, threads_num, result_list, lock)
