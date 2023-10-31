@@ -6,8 +6,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 from torch.distributions.normal import Normal
-import concurrent.futures
-import threading
+import torch.multiprocessing as mp
 from ..env.wrapper import EnvWrapper
 
 class ActorPPO(nn.Module):
@@ -82,7 +81,7 @@ class Config:  # for on-policy
         self.learning_rate = 6e-5  # 2 ** -14 ~= 6e-5
         self.soft_update_tau = 5e-3  # 2 ** -8 ~= 5e-3
         self.batch_size = int(128)  # num of transitions sampled from replay buffer, default 128
-        self.horizon_len = int(20)  # collect horizon_len step while exploring, then update network, default 2000
+        self.horizon_len = int(100)  # collect horizon_len step while exploring, then update network, default 2000
         self.buffer_size = None  # ReplayBuffer size. Empty the ReplayBuffer for on-policy.
         self.repeat_times = 8.0  # repeatedly update network using ReplayBuffer to keep critic's loss small, default 8.0
 
@@ -96,8 +95,8 @@ class Config:  # for on-policy
         self.if_remove = True  # remove the cwd folder? (True, False, None:ask me)
         self.break_step = +np.inf  # break training if 'total_step > break_step'
 
-        self.eval_times = int(4)  # number of times that get episodic cumulative return, default 32
-        self.eval_per_step = int(1e3)  # evaluate the agent per training steps, default 2e4
+        self.eval_times = int(5)  # number of times that get episodic cumulative return, default 32
+        self.eval_per_step = int(100)  # evaluate the agent per training steps, default 2e4
         
         '''Dict from config.yml'''
         self.env_config = []
@@ -167,7 +166,7 @@ class AgentPPO(AgentBase):
         rewards = torch.zeros(horizon_len, dtype=torch.float32).to(self.device)
         dones = torch.zeros(horizon_len, dtype=torch.bool).to(self.device)
 
-        ary_state = self.last_state[env.tag]
+        ary_state = self.last_state
 
         get_action = self.act.get_action
         convert = self.act.convert_action_for_env
@@ -186,7 +185,7 @@ class AgentPPO(AgentBase):
             rewards[i] = reward
             dones[i] = done
 
-        self.last_state[env.tag] = ary_state
+        self.last_state = ary_state
         rewards = (rewards * self.reward_scale).unsqueeze(1)
         undones = (1 - dones.type(torch.float32)).unsqueeze(1)
         return states, actions, logprobs, rewards, undones
@@ -194,10 +193,16 @@ class AgentPPO(AgentBase):
     def update_net(self, buffer) -> [float]:
         with torch.no_grad():
             states, actions, logprobs, rewards, undones = buffer
+            if states.device != self.device:
+                states = states.to(self.device)
+                actions = actions.to(self.device)
+                logprobs = logprobs.to(self.device)
+                rewards = rewards.to(self.device)
+                undones = undones.to(self.device)
             buffer_size = states.shape[0]
 
             '''get advantages reward_sums'''
-            bs = 2 ** 10  # set a smaller 'batch_size' when out of GPU memory.
+            bs = 2 ** 9  # set a smaller 'batch_size' when out of GPU memory.
             values = [self.cri(states[i:i + bs]) for i in range(0, buffer_size, bs)]
             values = torch.cat(values, dim=0).squeeze(1)  # values.shape == (buffer_size, )
 
@@ -248,9 +253,7 @@ class AgentPPO(AgentBase):
         masks = undones * self.gamma
         horizon_len = rewards.shape[0]
 
-        # next_state = torch.tensor(self.last_state, dtype=torch.float32).to(self.device)
-        # TODO: 因为改了 self.last_state, 不知道是否对这里有什么影响
-        next_state = torch.tensor(self.last_state[0], dtype=torch.float32).to(self.device)
+        next_state = torch.tensor(self.last_state, dtype=torch.float32).to(self.device)
         next_value = self.cri(next_state.unsqueeze(0)).detach().squeeze(1).squeeze(0)
 
         advantage = 0  # last_gae_lambda
@@ -260,24 +263,34 @@ class AgentPPO(AgentBase):
             next_value = values[t]
         return advantages
 
-def explore_and_store_result(agent, env, horizon_len, result_list, lock):
-    # 在 explore_env 中执行并将结果添加到共享列表中
-    # print("Start exploring env", env.tag)
+def explore_and_store_result(agent, env, act_shared_model, act_target_shared_model, cri_shared_model, cri_target_shared_model, horizon_len):
+    agent.act.load_state_dict(act_shared_model)
+    agent.act_target.load_state_dict(act_target_shared_model)
+    agent.cri.load_state_dict(cri_shared_model)
+    agent.cri_target.load_state_dict(cri_target_shared_model)
+    
     buffer_items = agent.explore_env(env, horizon_len)
-    with lock:
-        result_list.append([item.detach() for item in buffer_items])
+    ret = []
+    for item in buffer_items:
+        ret.append(item.cpu().detach())
+    return ret
 
 def train_agent(args: Config, threads_num, result_list, lock):
     args.init_before_training()
 
-    env = [args.env_class(args.env_config) for _ in range(max(threads_num,1))]
-    agent = args.agent_class(args.net_dims, args.state_dim, args.action_dim, gpu_id=args.gpu_id, args=args)
+    envs = [args.env_class(args.env_config) for _ in range(max(threads_num,1))]
+    agents = [args.agent_class(args.net_dims, args.state_dim, args.action_dim, gpu_id=args.gpu_id, args=args) for _ in range(max(threads_num,1))]
     
-    # 之前的 last_state 只是一个 state, 现在改成了数组, 与 env 一一对应
-    agent.last_state.clear()
+    # 创建共享的模型参数
+    act_shared_model = agents[0].act.state_dict()
+    act_target_shared_model = agents[0].act_target.state_dict()
+    cri_shared_model = agents[0].cri.state_dict()
+    cri_target_shared_model = agents[0].cri_target.state_dict()
+    
+    
     for i in range(max(threads_num,1)):
-        env[i].tag = i
-        agent.last_state.append(env[i].reset())
+        envs[i].tag = i
+        agents[i].last_state = envs[i].reset()
 
     evaluator = Evaluator(eval_env=args.env_class(args.env_config),
                           eval_per_step=args.eval_per_step,
@@ -285,38 +298,43 @@ def train_agent(args: Config, threads_num, result_list, lock):
                           cwd=args.cwd)
     torch.set_grad_enabled(False)          
     
+    # 创建进程池
+    pool = mp.Pool(processes=threads_num+1)
+    eval_result = None
+    
     while True:  # start training
         if threads_num == 0:
-            buffer_items = agent.explore_env(env[0], args.horizon_len)
+            buffer_items = agents[0].explore_env(envs[0], args.horizon_len)
         else:
-            # 创建 ProcessPoolExecutor, 指定进程数量（这里使用了 threads_num 个进程）
-            with concurrent.futures.ProcessPoolExecutor(max_workers=threads_num) as executor:
-                # print("开始探索")
-                result_list[:] = []
-                
-                # 使用 executor 并行执行 explore_env 函数
-                futures = [executor.submit(explore_and_store_result, agent, env[i], args.horizon_len, result_list, lock) for i in range(threads_num)]
-
-                concurrent.futures.wait(futures)
-                
-                for future in futures:
-                    future.result()
-                
-                # 获取每个进程的结果
-                N = len(result_list[0]) # number of tensors
-                buffer_items = [None] * N
-                for i in range(5):
-                    buffer_items[i] = torch.cat([result[i] for result in result_list], dim=0)
-                    # print(buffer_items[i].size())
+            # 提交任务并收集返回值
+            results = []
+            for i in range(threads_num):
+                result = pool.apply_async(explore_and_store_result, args=(agents[i], envs[i], act_shared_model, act_target_shared_model, cri_shared_model, cri_target_shared_model, args.horizon_len))
+                results.append(result)
+                        
+            # 等待所有进程完成并获取返回值
+            outputs = [result.get() for result in results]
+            N = len(outputs[0])
+            buffer_items = [None] * N
+            for i in range(N):
+                buffer_items[i] = torch.cat([output[i] for output in outputs], dim=0)
             
         torch.set_grad_enabled(True)
-        logging_tuple = agent.update_net(buffer_items)
+        logging_tuple = agents[0].update_net(buffer_items)
         torch.set_grad_enabled(False)
+        act_shared_model = agents[0].act.state_dict()
+        act_target_shared_model = agents[0].act_target.state_dict()
+        cri_shared_model = agents[0].cri.state_dict()
+        cri_target_shared_model = agents[0].cri_target.state_dict()
 
-        evaluator.evaluate_and_save(agent.act, args.horizon_len * threads_num, logging_tuple)
+        if eval_result is None:
+            eval_result = pool.apply_async(evaluator.evaluate_and_save, args=(agents[0].act, args.horizon_len * threads_num, logging_tuple))
+        elif eval_result.ready():
+            eval_result = pool.apply_async(evaluator.evaluate_and_save, args=(agents[0].act, args.horizon_len * threads_num, logging_tuple))
+            
+        # evaluator.evaluate_and_save(agents[0].act, args.horizon_len * threads_num, logging_tuple)
         if (evaluator.total_step > args.break_step) or os.path.exists(f"{args.cwd}/stop"):
             break  # stop training when reach `break_step` or `mkdir cwd/stop`
-
 
 def render_agent(env_class, env_args: dict, net_dims: [int], agent_class, actor_path: str, render_times: int = 8):
     env = args.env_class(args.env_config)
@@ -355,8 +373,8 @@ class Evaluator:
 
     def evaluate_and_save(self, actor, step_num: int, logging_tuple: tuple):
         self.total_step += step_num
-        if self.eval_step + self.eval_per_step > self.total_step:
-            return
+        # if self.eval_step + self.eval_per_step > self.total_step:
+        #     return
         self.eval_step = self.total_step
 
         # print("开始测试")
@@ -383,7 +401,7 @@ def get_rewards_and_steps(env, actor, if_render: bool = False) -> (float, int): 
     state = env.reset()
     episode_steps = 0
     cumulative_returns = 0.0  # sum of rewards in an episode
-    for episode_steps in range(10): # TODO: 一个 episode 太长了, 因而在训练过程中调整了这里, 实验过程中需要调得比较大
+    for episode_steps in range(1000): # TODO: 一个 episode 太长了, 因而在训练过程中调整了这里, 实验过程中需要调得比较大
         tensor_state = torch.as_tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
         tensor_action = actor(tensor_state)
         action = tensor_action.detach().cpu().numpy()[0]  # not need detach(), because using torch.no_grad() outside
