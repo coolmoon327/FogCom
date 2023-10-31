@@ -4,6 +4,7 @@ data/
 *.out
 *.pyc
 *.pkl
+*.pth
 
 !*.py
 !*.md

@@ -1,5 +1,6 @@
 import os
 import time
+import copy
 import gym
 import numpy as np
 import torch
@@ -281,11 +282,21 @@ def train_agent(args: Config, threads_num, result_list, lock):
     envs = [args.env_class(args.env_config) for _ in range(max(threads_num,1))]
     agents = [args.agent_class(args.net_dims, args.state_dim, args.action_dim, gpu_id=args.gpu_id, args=args) for _ in range(max(threads_num,1))]
     
-    # 创建共享的模型参数
-    act_shared_model = agents[0].act.state_dict()
-    act_target_shared_model = agents[0].act_target.state_dict()
-    cri_shared_model = agents[0].cri.state_dict()
-    cri_target_shared_model = agents[0].cri_target.state_dict()
+    act_grad_file = './results/act_grad.pth'
+    cri_grad_file = './results/cri_grad.pth'
+    if os.path.exists(act_grad_file) and os.path.exists(cri_grad_file):
+        print("Loaded model from files.")
+        # 从文件中加载梯度
+        act_shared_model = torch.load(act_grad_file)
+        act_target_shared_model = copy.deepcopy(act_shared_model)
+        cri_shared_model = torch.load(cri_grad_file)
+        cri_target_shared_model = copy.deepcopy(cri_shared_model)
+    else:
+        # 使用 agents[0] 的梯度
+        act_shared_model = agents[0].act.state_dict()
+        act_target_shared_model = agents[0].act_target.state_dict()
+        cri_shared_model = agents[0].cri.state_dict()
+        cri_target_shared_model = agents[0].cri_target.state_dict()
     
     
     for i in range(max(threads_num,1)):
@@ -327,14 +338,24 @@ def train_agent(args: Config, threads_num, result_list, lock):
         cri_shared_model = agents[0].cri.state_dict()
         cri_target_shared_model = agents[0].cri_target.state_dict()
 
-        if eval_result is None:
-            eval_result = pool.apply_async(evaluator.evaluate_and_save, args=(agents[0].act, args.horizon_len * threads_num, logging_tuple))
-        elif eval_result.ready():
-            eval_result = pool.apply_async(evaluator.evaluate_and_save, args=(agents[0].act, args.horizon_len * threads_num, logging_tuple))
+        if eval_result is None or eval_result.ready():
+            eval_result = evaluate_and_save(pool, evaluator, agents[0], args.horizon_len * threads_num, logging_tuple)
             
         # evaluator.evaluate_and_save(agents[0].act, args.horizon_len * threads_num, logging_tuple)
         if (evaluator.total_step > args.break_step) or os.path.exists(f"{args.cwd}/stop"):
             break  # stop training when reach `break_step` or `mkdir cwd/stop`
+
+def evaluate_and_save(pool, evaluator, agent, step_num, logging_tuple):
+    evaluator.total_step += step_num
+    evaluator.eval_step = evaluator.total_step
+    eval_result = pool.apply_async(evaluator.evaluate_and_save, args=(agent.act, logging_tuple))
+    
+    if not os.path.exists("./results"):
+        os.makedirs("./results")
+    torch.save(agent.act.state_dict(), './results/act_grad.pth')
+    torch.save(agent.cri.state_dict(), './results/cri_grad.pth')
+    
+    return eval_result
 
 def render_agent(env_class, env_args: dict, net_dims: [int], agent_class, actor_path: str, render_times: int = 8):
     env = args.env_class(args.env_config)
@@ -371,12 +392,12 @@ class Evaluator:
               f"\n| `objA`: Objective of Actor network. It is the average Q value of the critic network."
               f"\n| {'step':>8}  {'time':>8}  | {'avgR':>8}  {'stdR':>6}  {'avgS':>6}  | {'objC':>8}  {'objA':>8}")
 
-    def evaluate_and_save(self, actor, step_num: int, logging_tuple: tuple):
-        self.total_step += step_num
+    # def evaluate_and_save(self, actor, step_num: int, logging_tuple: tuple):
+        # self.total_step += step_num
         # if self.eval_step + self.eval_per_step > self.total_step:
         #     return
-        self.eval_step = self.total_step
-
+        # self.eval_step = self.total_step
+    def evaluate_and_save(self, actor, logging_tuple: tuple):
         # print("开始测试")
         
         rewards_steps_ary = [get_rewards_and_steps(self.env_eval, actor) for _ in range(self.eval_times)]
@@ -401,7 +422,7 @@ def get_rewards_and_steps(env, actor, if_render: bool = False) -> (float, int): 
     state = env.reset()
     episode_steps = 0
     cumulative_returns = 0.0  # sum of rewards in an episode
-    for episode_steps in range(1000): # TODO: 一个 episode 太长了, 因而在训练过程中调整了这里, 实验过程中需要调得比较大
+    for episode_steps in range(100): # TODO: 一个 episode 太长了, 因而在训练过程中调整了这里, 实验过程中需要调得比较大
         tensor_state = torch.as_tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
         tensor_action = actor(tensor_state)
         action = tensor_action.detach().cpu().numpy()[0]  # not need detach(), because using torch.no_grad() outside
