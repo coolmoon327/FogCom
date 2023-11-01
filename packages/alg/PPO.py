@@ -307,28 +307,39 @@ def train_agent(args: Config, threads_num, result_list, lock):
                           eval_per_step=args.eval_per_step,
                           eval_times=args.eval_times,
                           cwd=args.cwd)
-    torch.set_grad_enabled(False)          
+    evaluator.agent = args.agent_class(args.net_dims, args.state_dim, args.action_dim, gpu_id=args.gpu_id, args=args)
     
-    # 创建进程池
-    pool = mp.Pool(processes=threads_num+1)
+    torch.set_grad_enabled(False)
+    
+    # 创建 evaluator 的进程池
+    eval_pool = mp.Pool(processes=2)
     eval_result = None
     
     while True:  # start training
         if threads_num == 0:
             buffer_items = agents[0].explore_env(envs[0], args.horizon_len)
         else:
+            # 创建 explorer 的进程池
+            expl_pool = mp.Pool(processes=threads_num)
+            
             # 提交任务并收集返回值
             results = []
             for i in range(threads_num):
-                result = pool.apply_async(explore_and_store_result, args=(agents[i], envs[i], act_shared_model, act_target_shared_model, cri_shared_model, cri_target_shared_model, args.horizon_len))
+                result = expl_pool.apply_async(explore_and_store_result, args=(agents[i], envs[i], act_shared_model, act_target_shared_model, cri_shared_model, cri_target_shared_model, args.horizon_len))
                 results.append(result)
                         
             # 等待所有进程完成并获取返回值
+            expl_pool.close()
+            expl_pool.join()
             outputs = [result.get() for result in results]
             N = len(outputs[0])
             buffer_items = [None] * N
             for i in range(N):
                 buffer_items[i] = torch.cat([output[i] for output in outputs], dim=0)
+            
+            # 内存释放
+            del results
+            del outputs
             
         torch.set_grad_enabled(True)
         logging_tuple = agents[0].update_net(buffer_items)
@@ -338,17 +349,22 @@ def train_agent(args: Config, threads_num, result_list, lock):
         cri_shared_model = agents[0].cri.state_dict()
         cri_target_shared_model = agents[0].cri_target.state_dict()
 
+        evaluator.total_step += args.horizon_len * threads_num
+        
         if eval_result is None or eval_result.ready():
-            eval_result = evaluate_and_save(pool, evaluator, agents[0], args.horizon_len * threads_num, logging_tuple)
+            eval_result = evaluate_and_save(eval_pool, evaluator, agents[0], logging_tuple)
             
         # evaluator.evaluate_and_save(agents[0].act, args.horizon_len * threads_num, logging_tuple)
         if (evaluator.total_step > args.break_step) or os.path.exists(f"{args.cwd}/stop"):
             break  # stop training when reach `break_step` or `mkdir cwd/stop`
+        
+        # 内存释放
+        del buffer_items
 
-def evaluate_and_save(pool, evaluator, agent, step_num, logging_tuple):
-    evaluator.total_step += step_num
+def evaluate_and_save(pool, evaluator, agent, logging_tuple):
     evaluator.eval_step = evaluator.total_step
-    eval_result = pool.apply_async(evaluator.evaluate_and_save, args=(agent.act, logging_tuple))
+    evaluator.agent.act.load_state_dict(agent.act.state_dict())
+    eval_result = pool.apply_async(evaluator.evaluate_and_save, args=(logging_tuple,))
     
     if not os.path.exists("./results"):
         os.makedirs("./results")
@@ -382,6 +398,8 @@ class Evaluator:
         self.eval_times = eval_times  # number of times that get episodic cumulative return
         self.eval_per_step = eval_per_step  # evaluate the agent per training steps
 
+        self.agent = None
+        
         self.recorder = []
         print(f"\n| `step`: Number of samples, or total training steps, or running times of `env.step()`."
               f"\n| `time`: Time spent from the start of training to this moment."
@@ -397,8 +415,9 @@ class Evaluator:
         # if self.eval_step + self.eval_per_step > self.total_step:
         #     return
         # self.eval_step = self.total_step
-    def evaluate_and_save(self, actor, logging_tuple: tuple):
+    def evaluate_and_save(self, logging_tuple: tuple):
         # print("开始测试")
+        actor = self.agent.act
         
         rewards_steps_ary = [get_rewards_and_steps(self.env_eval, actor) for _ in range(self.eval_times)]
         rewards_steps_ary = np.array(rewards_steps_ary, dtype=np.float32)

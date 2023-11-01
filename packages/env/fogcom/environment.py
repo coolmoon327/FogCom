@@ -263,7 +263,7 @@ class Environment(object):
             provider: Node = task.provider()
             storage: Node = task.storage()
             # Reward = - Alpha * t_vm - (p_link * t_vm + p_s * s * t_vm) - p_vm * t_vm
-            reward = - (task.alpha + provider.p_link + provider.p_s * task.s + storage.p_vm) * provider.t_vm(task, storage, False) 
+            reward = 2000 - (task.alpha + provider.p_link + provider.p_s * task.s + storage.p_vm) * provider.t_vm(task, storage, False) 
         
         # T.append(time.time())
         

@@ -3,8 +3,11 @@ from packages.utils.logger import Logger
 from packages.test.test_env import *
 from packages.alg.PPO import train_ppo_for_fogcom
 import torch.multiprocessing as mp
+import faulthandler
 
 if __name__ == "__main__":
+    faulthandler.enable()
+    
     config = read_config('config.yml')
     
     mp.set_start_method('spawn')
