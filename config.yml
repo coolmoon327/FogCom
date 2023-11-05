@@ -2,7 +2,7 @@
 
 seed: 88
 
-T: 1000
+T: 10000
 N_u: 1000
 N_m: 50
 
@@ -29,9 +29,7 @@ cand_num: 10  # the number of candidates roughly selected by the leader before D
 # Training
 
 batch_size: 512
-num_ep_train: 20 # number of episodes from all agents
-break_step: 1000000  # break training if 'total_step > break_step'
-max_slot_per_ep: 30
+break_step: 10000000  # break training if 'total_step > break_step'
 
 gamma: 0.97  # discount factor of future rewards
 repeat_times: 16  # repeatedly update network using ReplayBuffer to keep critic's loss small

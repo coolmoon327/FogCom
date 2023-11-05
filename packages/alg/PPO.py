@@ -78,11 +78,11 @@ class Config:  # for on-policy
         self.reward_scale = 1.0  # an approximate target reward usually be closed to 256
 
         '''Arguments for training'''
-        self.net_dims = (64, 32)  # the middle layer dimension of MLP (MultiLayer Perceptron)
+        self.net_dims = (512, 128, 32)  # the middle layer dimension of MLP (MultiLayer Perceptron)
         self.learning_rate = 6e-5  # 2 ** -14 ~= 6e-5
         self.soft_update_tau = 5e-3  # 2 ** -8 ~= 5e-3
         self.batch_size = int(128)  # num of transitions sampled from replay buffer, default 128
-        self.horizon_len = int(100)  # collect horizon_len step while exploring, then update network, default 2000
+        self.horizon_len = int(1000)  # collect horizon_len step while exploring, then update network, default 2000
         self.buffer_size = None  # ReplayBuffer size. Empty the ReplayBuffer for on-policy.
         self.repeat_times = 8.0  # repeatedly update network using ReplayBuffer to keep critic's loss small, default 8.0
 
@@ -96,7 +96,7 @@ class Config:  # for on-policy
         self.if_remove = True  # remove the cwd folder? (True, False, None:ask me)
         self.break_step = +np.inf  # break training if 'total_step > break_step'
 
-        self.eval_times = int(5)  # number of times that get episodic cumulative return, default 32
+        self.eval_times = int(10)  # number of times that get episodic cumulative return, default 32
         self.eval_per_step = int(100)  # evaluate the agent per training steps, default 2e4
         
         '''Dict from config.yml'''
@@ -466,6 +466,7 @@ def train_ppo_for_fogcom(config, threads_num, result_list, lock):
     }
     args = Config(agent_class, env_class, env_args)  # see `config.py Arguments()` for hyperparameter explanation
     args.env_config = config
+    args.batch_size = config['batch_size']
     args.break_step = config['break_step']  # break training if 'total_step > break_step'
     args.net_dims = (64, 32)  # the middle layer dimension of MultiLayer Perceptron
     args.gamma = config['gamma']  # discount factor of future rewards
