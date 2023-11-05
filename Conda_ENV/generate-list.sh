@@ -1,0 +1,1 @@
+conda list --explicit > spec-list.txt
