@@ -229,34 +229,13 @@ class Environment(object):
         # log sw
         pass
     
-    def step(self, action: np.ndarray):
-        # T = []
-        # T.append(time.time())
-        
-        task = self.new_tasks[self.task_index-1]    # notice that the task_index indicates the latter task after the current task (seen in next_task 2.)
-        
-        # 1. translate action 
-        candidates = []
-        # for i in range(len(action)):    # 1 - selected, 0 - not selected
-        #     if np.round(action[i]):
-        #         candidates.append(self.raw_candidates[i])
-        for i in range(int(len(action)/2)):
-            inputs = action[i*2:i*2+2]
-            is_selected = np.argmax(inputs) # TODO: 现在是取 max, 之后看情况改成根据概率来选
-            if is_selected:
-                candidates.append(self.raw_candidates[i])
-        
-        # T.append(time.time())
-        
+    def execute_and_next(self, task, candidates):
         # 2. execute action  (storage, duration, act_tasks)
         ret = self.leader.inform_candidates(task, candidates)
-        
-        # T.append(time.time())
         
         if not ret:
             self.drop_num += 1
             reward = self.config['penalty']
-        
         else:
             self.execute_task(task)
             # 3. calculate reward
@@ -265,18 +244,57 @@ class Environment(object):
             # Reward = - Alpha * t_vm - (p_link * t_vm + p_s * s * t_vm) - p_vm * t_vm
             reward = 2000 - (task.alpha + provider.p_link + provider.p_s * task.s + storage.p_vm) * provider.t_vm(task, storage, False) 
         
-        # T.append(time.time())
-        
         # 4. get next task (state)
         state = self.next_task()
-
-        # T.append(time.time())
-        # print("=================")
-        # for i in range(len(T)-1):
-        #     print(i, ":", T[i+1]-T[i])
-        # print("=================")
-        # time.sleep(5)
         
         terminal = self.config['n_slot'] >= self.config['T']
         info_dict = {}
         return state, reward, terminal, info_dict
+    
+    def step_with_inner_policy(self, policy_id: int):
+        # policy_id:
+        # 0 - random
+        # 1 - greedy
+        
+        task = self.new_tasks[self.task_index-1]
+        
+        candidates = []
+        
+        if policy_id == 0:
+            rid = np.random.randint(0, len(self.raw_candidates))
+            candidates = [self.raw_candidates[rid]]
+        elif policy_id == 1:
+            len_not_null = 0
+            while not self.raw_candidates[len_not_null].is_Null():
+                len_not_null += 1
+            rid = np.random.randint(0, len_not_null)
+            candidates = [self.raw_candidates[rid]]
+        elif policy_id == 2:
+            candidates = [self.raw_candidates[0]]
+        elif policy_id == 3:
+            provider: Node = task.provider()
+            maxx = -1e6
+            for node in self.raw_candidates:
+                if node.is_Null():
+                    break
+                sw = self.leader.social_welfare(task, provider, node, estimate=False)
+                if sw >= maxx:
+                    maxx = sw
+                    candidates = [node]
+            
+        return self.execute_and_next(task, candidates)
+    
+    def step(self, action: np.ndarray):
+        task = self.new_tasks[self.task_index-1]    # notice that the task_index indicates the latter task after the current task (seen in next_task 2.)
+        
+        # 1. translate action 
+        candidates = []
+        for i in range(int(len(action)/2)):
+            inputs = action[i*2:i*2+2]
+            is_selected = np.argmax(inputs) # TODO: 现在是取 max, 之后看情况改成根据概率来选
+            if is_selected:
+                candidates.append(self.raw_candidates[i])
+        
+        return self.execute_and_next(task, candidates)
+        
+        

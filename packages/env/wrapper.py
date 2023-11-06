@@ -27,6 +27,11 @@ class EnvWrapper:
         next_state = next_state.reshape(self.state_dim)
         return next_state, float(reward), terminal, info_dict
 
+    def step_with_inner_policy(self, policy_id: int):
+        next_state, reward, terminal, info_dict = self.env.step_with_inner_policy(policy_id)
+        next_state = next_state.reshape(self.state_dim)
+        return next_state, float(reward), terminal, info_dict
+    
     def set_random_seed(self, seed):
         self.env.seed(seed)
 

@@ -2,6 +2,7 @@ from packages.utils.utils import read_config
 from packages.utils.logger import Logger
 from packages.test.test_env import *
 from packages.alg.PPO import train_ppo_for_fogcom
+from packages.alg.eval import test_with_inner_policy
 import torch.multiprocessing as mp
 import faulthandler
 
@@ -18,3 +19,4 @@ if __name__ == "__main__":
     
     # test_env(config)
     train_ppo_for_fogcom(config, threads_num, result_list, lock)
+    # test_with_inner_policy(config)
