@@ -201,6 +201,7 @@ class Environment(object):
         state.append(provider.bw)
         state.append(provider.lt)
         state.append(provider.strategy) # TODO: 暂时用作测试, 完善后改回 tag
+        # state.append(0.) # 无类型 tag
         for node in self.raw_candidates:
             s = []
             if node.is_Null():
@@ -253,8 +254,11 @@ class Environment(object):
     
     def step_with_inner_policy(self, policy_id: int):
         # policy_id:
-        # 0 - random
-        # 1 - greedy
+        # 0 - total random (can drop)
+        # 1 - random
+        # 2 - greedy
+        # 3 - greedy (observe all)
+        # 4 - all
         
         task = self.new_tasks[self.task_index-1]
         
@@ -281,6 +285,11 @@ class Environment(object):
                 if sw >= maxx:
                     maxx = sw
                     candidates = [node]
+        elif policy_id == 4:
+            len_not_null = 0
+            while not self.raw_candidates[len_not_null].is_Null():
+                len_not_null += 1
+            candidates = self.raw_candidates[0:len_not_null]
             
         return self.execute_and_next(task, candidates)
     
@@ -294,6 +303,9 @@ class Environment(object):
             is_selected = np.argmax(inputs) # TODO: 现在是取 max, 之后看情况改成根据概率来选
             if is_selected:
                 candidates.append(self.raw_candidates[i])
+        
+        if not len(candidates) and self.config['ganrantee_policy']:
+            candidates = [self.raw_candidates[0]]
         
         return self.execute_and_next(task, candidates)
         

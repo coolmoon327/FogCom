@@ -1,10 +1,12 @@
 import torch
 import time
 import numpy as np
+import os
+import torch.multiprocessing as mp
 from ..env.wrapper import EnvWrapper
 
 class Evaluator:
-    def __init__(self, eval_env, eval_per_step: int = 1e4, eval_times: int = 8, cwd: str = '.'):
+    def __init__(self, eval_env, eval_per_step: int = 1e4, eval_times: int = 8, cwd: str = '.', print_head = True):
         self.cwd = cwd
         self.env_eval = eval_env
         self.eval_step = 0
@@ -16,14 +18,15 @@ class Evaluator:
         self.agent = None
         
         self.recorder = []
-        print(f"\n| `step`: Number of samples, or total training steps, or running times of `env.step()`."
-              f"\n| `time`: Time spent from the start of training to this moment."
-              f"\n| `avgR`: Average value of cumulative rewards, which is the sum of rewards in an episode."
-              f"\n| `stdR`: Standard dev of cumulative rewards, which is the sum of rewards in an episode."
-              f"\n| `avgS`: Average of steps in an episode."
-              f"\n| `objC`: Objective of Critic network. Or call it loss function of critic network."
-              f"\n| `objA`: Objective of Actor network. It is the average Q value of the critic network."
-              f"\n| {'step':>8}  {'time':>8}  | {'avgR':>8}  {'stdR':>6}  {'avgS':>6}  | {'objC':>8}  {'objA':>8}")
+        if print_head:
+            print(f"\n| `step`: Number of samples, or total training steps, or running times of `env.step()`."
+                f"\n| `time`: Time spent from the start of training to this moment."
+                f"\n| `avgR`: Average value of cumulative rewards, which is the sum of rewards in an episode."
+                f"\n| `stdR`: Standard dev of cumulative rewards, which is the sum of rewards in an episode."
+                f"\n| `avgS`: Average of steps in an episode."
+                f"\n| `objC`: Objective of Critic network. Or call it loss function of critic network."
+                f"\n| `objA`: Objective of Actor network. It is the average Q value of the critic network."
+                f"\n| {'step':>8}  {'time':>8}  | {'avgR':>8}  {'stdR':>6}  {'avgS':>6}  | {'objC':>8}  {'objA':>8}")
 
     def evaluate_and_save(self, logging_tuple: tuple):
         # print("开始测试")
@@ -77,7 +80,7 @@ def get_rewards_and_steps(env, actor, if_render: bool = False) -> (float, int): 
     return cumulative_returns, episode_steps + 1
 
 def step_with_inner_policy(env, policy_id: int):
-    state = env.reset()
+    env.reset()
     episode_steps = 0
     cumulative_returns = 0.0  # sum of rewards in an episode
     for episode_steps in range(100):
@@ -88,9 +91,17 @@ def step_with_inner_policy(env, policy_id: int):
             break
     return cumulative_returns, episode_steps + 1
 
-def test_with_inner_policy(config):
-    evaluator = Evaluator(eval_env=EnvWrapper(config), eval_times=64)
-    for i in range(4):
-        evaluator.total_step = i
-        evaluator.test_with_inner_policy(i)
+def test(config):
+    config["penalty"] = 0.
+    num = 5
     
+    evaluators = [Evaluator(eval_env=EnvWrapper(config), eval_times=100, print_head=False) for _ in range(num-1)]
+    evaluators.append(Evaluator(eval_env=EnvWrapper(config), eval_times=100))   # 独立一个出来打印
+    
+    pool = mp.Pool(processes=10)
+    for i in range(num):
+        evaluators[i].total_step = i
+        pool.apply_async(evaluators[i].test_with_inner_policy, args=(i,))
+
+    pool.close()
+    pool.join()

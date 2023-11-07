@@ -360,15 +360,16 @@ def train_agent(args: Config, threads_num, result_list, lock):
         # 内存释放
         del buffer_items
 
-def evaluate_and_save(pool, evaluator, agent, logging_tuple):
+def evaluate_and_save(pool, evaluator, agent, logging_tuple, save=True):
     evaluator.eval_step = evaluator.total_step
     evaluator.agent.act.load_state_dict(agent.act.state_dict())
     eval_result = pool.apply_async(evaluator.evaluate_and_save, args=(logging_tuple,))
     
-    if not os.path.exists("./results"):
-        os.makedirs("./results")
-    torch.save(agent.act.state_dict(), './results/act_grad.pth')
-    torch.save(agent.cri.state_dict(), './results/cri_grad.pth')
+    if save:
+        if not os.path.exists("./results"):
+            os.makedirs("./results")
+        torch.save(agent.act.state_dict(), './results/act_grad.pth')
+        torch.save(agent.cri.state_dict(), './results/cri_grad.pth')
     
     return eval_result
 
@@ -386,7 +387,7 @@ def render_agent(env_class, env_args: dict, net_dims: [int], agent_class, actor_
         cumulative_reward, episode_step = get_rewards_and_steps(env, actor, if_render=True)
         print(f"|{i:4}  cumulative_reward {cumulative_reward:9.3f}  episode_step {episode_step:5.0f}")
 
-def train_ppo_for_fogcom(config, threads_num, result_list, lock):
+def set_args(config):
     agent_class = AgentPPO  # DRL algorithm name
     env_class = EnvWrapper
     env_instance = env_class(config)
@@ -403,5 +404,27 @@ def train_ppo_for_fogcom(config, threads_num, result_list, lock):
     args.net_dims = (64, 32)  # the middle layer dimension of MultiLayer Perceptron
     args.gamma = config['gamma']  # discount factor of future rewards
     args.repeat_times = config['repeat_times']  # repeatedly update network using ReplayBuffer to keep critic's loss small
-    
+    return args
+
+def train_ppo_for_fogcom(config, threads_num, result_list, lock):
+    args = set_args(config)
     train_agent(args, threads_num, result_list, lock)
+
+def test(config):
+    config['penalty'] = 0.
+    # config['ganrantee_policy'] = True
+    if config['ganrantee_policy']:
+        print("允许切换算法")
+    args = set_args(config)
+    
+    act_grad_file = './results/act_grad.pth'
+    act_model = torch.load(act_grad_file)
+    
+    evaluator = Evaluator(eval_env=EnvWrapper(config), eval_times=100)
+    evaluator.agent = args.agent_class(args.net_dims, args.state_dim, args.action_dim, gpu_id=args.gpu_id, args=args)
+    
+    evaluator.eval_step = 111
+    evaluator.agent.act.load_state_dict(act_model)
+    logging_tuple = (0., 0.)
+    evaluator.evaluate_and_save(logging_tuple)
+    
