@@ -77,16 +77,23 @@ class Environment(object):
         # Env Info
         self.env_name = 'FogComputing'
         
+        # high = np.array(
+        #     [20., 1000., 1000., 50., 50., 1.]
+        #     +[config['N_m'] for _ in range(config['tag_len'])]
+        #     +[1., 1000., 50., 1.,]*config['cand_num'],
+        #     dtype=np.float32,
+        # )
+
         high = np.array(
             [20., 1000., 1000., 50., 50., 1.]
-            +[config['N_m'] for _ in range(config['tag_len'])]
-            +[1, 1000., 50., 1.,]*config['cand_num'],
+            +[1. for _ in range(config['tag_len'])]
+            +[1., 1000., 50., 1.,]*config['cand_num'],
             dtype=np.float32,
         )
         
         low = np.array(
             [-10., 500., 100., 10., 1., 0.001]
-            +[0 for _ in range(config['tag_len'])]
+            +[0. for _ in range(config['tag_len'])]
             +[0., 100., 1., 0.001,]*config['cand_num'],
             dtype=np.float32,
         )
@@ -200,8 +207,16 @@ class Environment(object):
         state.append(provider.p_s)
         state.append(provider.bw)
         state.append(provider.lt)
-        state.append(provider.strategy) # TODO: 暂时用作测试, 完善后改回 tag
-        # state.append(0.) # 无类型 tag
+        if provider.strategy == 0:
+            state += [1., 0., 0., 0.]
+        elif provider.strategy == 1:
+            state += [0., 1., 0., 0.]
+        elif provider.strategy == 2:
+            state += [0., 0., 1., 0.]
+        elif provider.strategy == 3:
+            state += [0., 0., 0., 1.]
+        else:
+            state += [0., 0., 0., 0.]
         for node in self.raw_candidates:
             s = []
             if node.is_Null():
@@ -217,8 +232,8 @@ class Environment(object):
         return state
     
     def execute_task(self, task: Task):
-        provider = task.provider()
-        storage = task.storage()
+        provider: Server = task.provider()
+        storage: Server = task.storage()
         
         # set task state
         real_duration = provider.delta_t(task, storage, False)
@@ -249,7 +264,7 @@ class Environment(object):
         state = self.next_task()
         
         terminal = self.config['n_slot'] >= self.config['T']
-        info_dict = {}
+        info_dict = {"drop_num":self.drop_num}
         return state, reward, terminal, info_dict
     
     def step_with_inner_policy(self, policy_id: int):

@@ -23,7 +23,7 @@ alpha: 1.
 beta: 10.
 M: 10000
 
-tag_len: 1 # the length of test tags
+tag_len: 4 # the length of test tags
 cand_num: 10  # the number of candidates roughly selected by the leader before DRL policy
 
 ganrantee_policy: false # whether use an inner policy to select node for ganrantee when RL fails (selects a Null node)
@@ -31,7 +31,7 @@ ganrantee_policy: false # whether use an inner policy to select node for ganrant
 # Training
 
 batch_size: 512
-break_step: 10000000  # break training if 'total_step > break_step'
+break_step: 100000000  # break training if 'total_step > break_step'
 
 gamma: 0.97  # discount factor of future rewards
 repeat_times: 16  # repeatedly update network using ReplayBuffer to keep critic's loss small

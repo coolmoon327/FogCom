@@ -16,10 +16,11 @@ if __name__ == "__main__":
     manager = mp.Manager()
     result_list = manager.list()
     lock = manager.Lock()
-    threads_num = 10 # 若要调试, 此处设置为 0
+    threads_num = 20 # 若要调试, 此处设置为 0
     
     # test_env(config)
     # train_ppo_for_fogcom(config, threads_num, result_list, lock)
-    test_others(config)
     test_ppo(config)
+    test_others(config)
+    
     

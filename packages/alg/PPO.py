@@ -95,7 +95,7 @@ class Config:  # for on-policy
         self.if_remove = True  # remove the cwd folder? (True, False, None:ask me)
         self.break_step = +np.inf  # break training if 'total_step > break_step'
 
-        self.eval_times = int(10)  # number of times that get episodic cumulative return, default 32
+        self.eval_times = int(100)  # number of times that get episodic cumulative return, default 32
         self.eval_per_step = int(100)  # evaluate the agent per training steps, default 2e4
         
         '''Dict from config.yml'''
@@ -423,7 +423,7 @@ def test(config):
     evaluator = Evaluator(eval_env=EnvWrapper(config), eval_times=100)
     evaluator.agent = args.agent_class(args.net_dims, args.state_dim, args.action_dim, gpu_id=args.gpu_id, args=args)
     
-    evaluator.eval_step = 111
+    evaluator.total_step = 111
     evaluator.agent.act.load_state_dict(act_model)
     logging_tuple = (0., 0.)
     evaluator.evaluate_and_save(logging_tuple)

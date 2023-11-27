@@ -37,6 +37,7 @@ class Evaluator:
         avg_r = rewards_steps_ary[:, 0].mean()  # average of cumulative rewards
         std_r = rewards_steps_ary[:, 0].std()  # std of cumulative rewards
         avg_s = rewards_steps_ary[:, 1].mean()  # average of steps in an episode
+        avg_drop_num = rewards_steps_ary[:, 2].mean()
 
         # print("结束测试")
         
@@ -45,7 +46,7 @@ class Evaluator:
 
         print(f"| {self.total_step:8.2e}  {used_time:8.0f}  "
               f"| {avg_r:8.2f}  {std_r:6.2f}  {avg_s:6.0f}  "
-              f"| {logging_tuple[0]:8.2f}  {logging_tuple[1]:8.2f}")
+              f"| {logging_tuple[0]:8.2f}  {logging_tuple[1]:8.2f} | drop_num={avg_drop_num}")
     
     def test_with_inner_policy(self, policy_id):
         rewards_steps_ary = [step_with_inner_policy(self.env_eval, policy_id) for _ in range(self.eval_times)]
@@ -60,8 +61,10 @@ class Evaluator:
               f"| None  None")
 
 
-def get_rewards_and_steps(env, actor, if_render: bool = False) -> (float, int):  # cumulative_rewards and episode_steps
+def get_rewards_and_steps(env, actor, if_render: bool = False):  # cumulative_rewards and episode_steps
     device = next(actor.parameters()).device  # net.parameters() is a Python generator.
+
+    drop_num = 0
 
     state = env.reset()
     episode_steps = 0
@@ -70,14 +73,17 @@ def get_rewards_and_steps(env, actor, if_render: bool = False) -> (float, int): 
         tensor_state = torch.as_tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
         tensor_action = actor(tensor_state)
         action = tensor_action.detach().cpu().numpy()[0]  # not need detach(), because using torch.no_grad() outside
-        state, reward, done, _ = env.step(action)
+        state, reward, done, info = env.step(action)
         cumulative_returns += reward
+
+        drop_num += info["drop_num"]
 
         if if_render:
             env.render()
         if done:
             break
-    return cumulative_returns, episode_steps + 1
+
+    return cumulative_returns, episode_steps + 1, drop_num
 
 def step_with_inner_policy(env, policy_id: int):
     env.reset()
