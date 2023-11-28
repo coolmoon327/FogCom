@@ -5,6 +5,8 @@ import os
 import torch.multiprocessing as mp
 from ..env.wrapper import EnvWrapper
 
+total_steps = 100
+
 class Evaluator:
     def __init__(self, eval_env, eval_per_step: int = 1e4, eval_times: int = 8, cwd: str = '.', print_head = True):
         self.cwd = cwd
@@ -69,7 +71,7 @@ def get_rewards_and_steps(env, actor, if_render: bool = False):  # cumulative_re
     state = env.reset()
     episode_steps = 0
     cumulative_returns = 0.0  # sum of rewards in an episode
-    for episode_steps in range(100): # TODO: 一个 episode 太长了, 因而在训练过程中调整了这里, 实验过程中需要调得比较大
+    for episode_steps in range(total_steps): # TODO: 一个 episode 太长了, 因而在训练过程中调整了这里, 实验过程中需要调得比较大
         tensor_state = torch.as_tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
         tensor_action = actor(tensor_state)
         action = tensor_action.detach().cpu().numpy()[0]  # not need detach(), because using torch.no_grad() outside
@@ -89,7 +91,7 @@ def step_with_inner_policy(env, policy_id: int):
     env.reset()
     episode_steps = 0
     cumulative_returns = 0.0  # sum of rewards in an episode
-    for episode_steps in range(100):
+    for episode_steps in range(total_steps):
         state, reward, done, _ = env.step_with_inner_policy(policy_id)
         cumulative_returns += reward
 

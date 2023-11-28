@@ -16,7 +16,7 @@ class Server(Node):
         
         # 2. set vm storage
         self.vms = []
-        rn = np.random.randint(1, 10)
+        rn = min(self.config['vm_num'], np.random.randint(1, 10))
         while rn:
             rn -= 1
             rid = np.random.randint(0, self.config['vm_num'])
@@ -27,6 +27,7 @@ class Server(Node):
         # 3. set known links
         # Notably, a server knows all the nodes from its CSP. We handle this condition in select_storage func.
         # assuming each node has visited 20% nodes in history
+        # TODO: 这里是影响对 f 策略估计的最大变数, 但是 training data 里已经排除了影响
         self.is_known = [True if np.random.randint(0, 10) < 3 else False for _ in range(self.config['N_m'])]  # index: server_id, value: known or not
         
         # 4. set states
@@ -37,10 +38,13 @@ class Server(Node):
     
     def is_estimate(self, node: Node):
         estimate = True
-        if hasattr(node, 'csp'):
-            if self.csp == node.csp:
+        try:
+            if hasattr(node, 'csp'):
+                if self.csp == node.csp:
+                    estimate = False
+            if self.is_known[node.id]:
                 estimate = False
-        if self.is_known[node.id]:
+        except:
             estimate = False
         return estimate
     
@@ -71,7 +75,7 @@ class Server(Node):
         return ans
     
     def select_storage(self, task: Task, candidates: list):
-        maxx = 0.
+        maxx = -1e6
         target_s = None
         for node in candidates:
             if node.is_Null():

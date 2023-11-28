@@ -193,7 +193,7 @@ class Environment(object):
         self.raw_candidates = self.leader.search_candidates(task)
         if provider in self.raw_candidates:
             task.set_storage(provider)
-            self.execute_task()
+            self.execute_task(task)
             return self.next_task() # recursion
         
         # 5. generate state info
@@ -207,16 +207,23 @@ class Environment(object):
         state.append(provider.p_s)
         state.append(provider.bw)
         state.append(provider.lt)
-        if provider.strategy == 0:
+
+        if self.config['force_worker_tag_in_state'] == -1:
+            tag = provider.strategy
+        else:
+            tag = self.config['force_worker_tag_in_state']
+
+        if tag == 0:
             state += [1., 0., 0., 0.]
-        elif provider.strategy == 1:
+        elif tag == 1:
             state += [0., 1., 0., 0.]
-        elif provider.strategy == 2:
+        elif tag == 2:
             state += [0., 0., 1., 0.]
-        elif provider.strategy == 3:
+        elif tag == 3:
             state += [0., 0., 0., 1.]
         else:
             state += [0., 0., 0., 0.]
+
         for node in self.raw_candidates:
             s = []
             if node.is_Null():

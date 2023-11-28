@@ -27,7 +27,7 @@ class VM(object):
         Returns:
             list[Node]: the list of server instances
         """
-        return copy.deepcopy(self.servers)
+        return self.servers
 
 class Task(object):
     total_tasks=0
@@ -100,19 +100,19 @@ class Task(object):
         if not hasattr(self, '_user'):
             print(f"Unset property: \'_user\' in task {self.id}.")
             return
-        return copy.deepcopy(self._user)
+        return self._user
     
     def provider(self):
         if not hasattr(self, '_provider'):
             print(f"Unset property: \'_provider\' in task {self.id}.")
             return
-        return copy.deepcopy(self._provider)
+        return self._provider
     
     def storage(self):
         if not hasattr(self, '_storage'):
             print(f"Unset property: \'_storage\' in task {self.id}.")
             return
-        return copy.deepcopy(self._storage)
+        return self._storage
     
     def drop(self):
         self.dropped = True

@@ -81,7 +81,7 @@ class Config:  # for on-policy
         self.learning_rate = 6e-5  # 2 ** -14 ~= 6e-5
         self.soft_update_tau = 5e-3  # 2 ** -8 ~= 5e-3
         self.batch_size = int(128)  # num of transitions sampled from replay buffer, default 128
-        self.horizon_len = int(1000)  # collect horizon_len step while exploring, then update network, default 2000
+        self.horizon_len = int(5000)  # collect horizon_len step while exploring, then update network, default 2000
         self.buffer_size = None  # ReplayBuffer size. Empty the ReplayBuffer for on-policy.
         self.repeat_times = 8.0  # repeatedly update network using ReplayBuffer to keep critic's loss small, default 8.0
 
@@ -330,7 +330,25 @@ def train_agent(args: Config, threads_num, result_list, lock):
             # 等待所有进程完成并获取返回值
             expl_pool.close()
             expl_pool.join()
-            outputs = [result.get() for result in results]
+
+            outputs = []
+
+            exception_occurred = False
+            for i, result in enumerate(results):
+                try:
+                    output = result.get(timeout=1)  # 设置超时时间为1秒
+                    if not result.successful():
+                        print(f"Process {i} did not complete successfully.")
+                        exception_occurred = True
+                    else:
+                        outputs.append(output)
+                except Exception as e:
+                    print(f"Exception occurred in process {i}: {e}")
+                    exception_occurred = True
+
+            if exception_occurred:
+                print("Some processes encountered exceptions.")
+
             N = len(outputs[0])
             buffer_items = [None] * N
             for i in range(N):
@@ -410,7 +428,7 @@ def train_ppo_for_fogcom(config, threads_num, result_list, lock):
     args = set_args(config)
     train_agent(args, threads_num, result_list, lock)
 
-def test(config):
+def test(config, test_times=1):
     config['penalty'] = 0.
     # config['ganrantee_policy'] = True
     if config['ganrantee_policy']:
@@ -418,13 +436,16 @@ def test(config):
     args = set_args(config)
     
     act_grad_file = './results/act_grad.pth'
-    act_model = torch.load(act_grad_file)
     
     evaluator = Evaluator(eval_env=EnvWrapper(config), eval_times=100)
     evaluator.agent = args.agent_class(args.net_dims, args.state_dim, args.action_dim, gpu_id=args.gpu_id, args=args)
     
     evaluator.total_step = 111
-    evaluator.agent.act.load_state_dict(act_model)
     logging_tuple = (0., 0.)
-    evaluator.evaluate_and_save(logging_tuple)
-    
+
+    for i in range(test_times):
+        act_model = torch.load(act_grad_file)
+        evaluator.agent.act.load_state_dict(act_model)
+        
+        evaluator.evaluate_and_save(logging_tuple)
+        evaluator.total_step += 1

@@ -1,0 +1,38 @@
+# Environment
+
+seed: 88
+
+# The number of estimation groups
+# An estimation group is a tuple {task, servers}
+group_num: 100
+
+training_data_num: 1000000
+
+T: 0
+N_u: 0
+N_m: 0
+
+# used to synchronize the number of slots among different py files in this module
+n_slot: 0
+
+slot_length: 0.1  # s
+block_size: 1 # MB
+result_size: 0.001 # MB
+
+csp_num: 5
+vm_num: 1 # start from #0
+task_freq: 0 # the numebr of tasks per second
+
+follower_strategies_num: 4
+# 0 - no bias
+# 1 - computation-conservative
+# 2 - storage-conservative
+# 3 - CSP-preference
+alpha: 1.
+beta: 10.
+M: 10000
+
+tag_len: 4 # the length of test tags
+cand_num: 10  # the number of candidates roughly selected by the leader before DRL policy
+
+ganrantee_policy: false # whether use an inner policy to select node for ganrantee when RL fails (selects a Null node)
