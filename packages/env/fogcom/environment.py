@@ -185,7 +185,7 @@ class Environment(object):
         # 3. assign a provider by estimating
         ret = self.leader.assign_provider(task)
         if not ret:
-            self.drop_num += 1
+            # self.drop_num += 1
             return self.next_task() # recursion
         provider: Node = task.provider()
         
@@ -259,6 +259,7 @@ class Environment(object):
         if not ret:
             self.drop_num += 1
             reward = self.config['penalty']
+            sw = 0
         else:
             self.execute_task(task)
             # 3. calculate reward
@@ -266,12 +267,13 @@ class Environment(object):
             storage: Node = task.storage()
             # Reward = - Alpha * t_vm - (p_link * t_vm + p_s * s * t_vm) - p_vm * t_vm
             reward = 2000 - (task.alpha + provider.p_link + provider.p_s * task.s + storage.p_vm) * provider.t_vm(task, storage, False) 
-        
+            sw = self.leader.social_welfare(task, provider, storage, False)
+
         # 4. get next task (state)
         state = self.next_task()
         
         terminal = self.config['n_slot'] >= self.config['T']
-        info_dict = {"drop_num":self.drop_num}
+        info_dict = {"drop_num":self.drop_num, "sw":sw}
         return state, reward, terminal, info_dict
     
     def step_with_inner_policy(self, policy_id: int):

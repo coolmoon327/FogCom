@@ -81,9 +81,9 @@ class Config:  # for on-policy
         self.learning_rate = 6e-5  # 2 ** -14 ~= 6e-5
         self.soft_update_tau = 5e-3  # 2 ** -8 ~= 5e-3
         self.batch_size = int(128)  # num of transitions sampled from replay buffer, default 128
-        self.horizon_len = int(5000)  # collect horizon_len step while exploring, then update network, default 2000
+        self.horizon_len = int(2000)  # collect horizon_len step while exploring, then update network, default 2000
         self.buffer_size = None  # ReplayBuffer size. Empty the ReplayBuffer for on-policy.
-        self.repeat_times = 8.0  # repeatedly update network using ReplayBuffer to keep critic's loss small, default 8.0
+        self.repeat_times = 4.0  # repeatedly update network using ReplayBuffer to keep critic's loss small, default 8.0
 
         '''Arguments for device'''
         self.gpu_id = int(0)  # `int` means the ID of single GPU, -1 means CPU
@@ -95,8 +95,8 @@ class Config:  # for on-policy
         self.if_remove = True  # remove the cwd folder? (True, False, None:ask me)
         self.break_step = +np.inf  # break training if 'total_step > break_step'
 
-        self.eval_times = int(100)  # number of times that get episodic cumulative return, default 32
-        self.eval_per_step = int(100)  # evaluate the agent per training steps, default 2e4
+        self.eval_times = int(10000)  # number of times that get episodic cumulative return, default 32
+        self.eval_per_step = int(1)  # evaluate the agent per training steps, default 2e4
         
         '''Dict from config.yml'''
         self.env_config = []
@@ -430,14 +430,14 @@ def train_ppo_for_fogcom(config, threads_num, result_list, lock):
 
 def test(config, test_times=1):
     config['penalty'] = 0.
-    # config['ganrantee_policy'] = True
+    config['ganrantee_policy'] = True
     if config['ganrantee_policy']:
         print("允许切换算法")
     args = set_args(config)
     
     act_grad_file = './results/act_grad.pth'
     
-    evaluator = Evaluator(eval_env=EnvWrapper(config), eval_times=100)
+    evaluator = Evaluator(eval_env=EnvWrapper(config), eval_times=100000)
     evaluator.agent = args.agent_class(args.net_dims, args.state_dim, args.action_dim, gpu_id=args.gpu_id, args=args)
     
     evaluator.total_step = 111
@@ -446,6 +446,6 @@ def test(config, test_times=1):
     for i in range(test_times):
         act_model = torch.load(act_grad_file)
         evaluator.agent.act.load_state_dict(act_model)
-        
+
         evaluator.evaluate_and_save(logging_tuple)
         evaluator.total_step += 1
