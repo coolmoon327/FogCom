@@ -9,8 +9,11 @@ class CustomClassifier(nn.Module):
         super(CustomClassifier, self).__init__()
         self.fc1 = nn.Linear(input_size, 128)
         self.relu = nn.ReLU()
-        self.fc2 = nn.Linear(128, 64)
-        self.fc3 = nn.Linear(64, output_size)
+        self.fc2 = nn.Linear(128, 512)
+        self.fc3 = nn.Linear(512, 1024)
+        self.fc4 = nn.Linear(1024, 512)
+        self.fc5 = nn.Linear(512, 64)
+        self.fc6 = nn.Linear(64, output_size)
         self.softmax = nn.Softmax(dim=1)
 
     def forward(self, x):
@@ -19,6 +22,12 @@ class CustomClassifier(nn.Module):
         x = self.fc2(x)
         x = self.relu(x)
         x = self.fc3(x)
+        x = self.relu(x)
+        x = self.fc4(x)
+        x = self.relu(x)
+        x = self.fc5(x)
+        x = self.relu(x)
+        x = self.fc6(x)
         x = self.softmax(x)
         return x
     
@@ -72,7 +81,7 @@ class Trainer(object):
 
         # 定义损失函数和优化器
         self.criterion = nn.CrossEntropyLoss()
-        self.optimizer = optim.Adam(self.model.parameters(), lr=0.001)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=0.000001)
 
         self.model_save_path = f'./data/classifier_model_{t_length}.pth'
 
@@ -80,9 +89,17 @@ class Trainer(object):
         self.model.load_state_dict(torch.load(self.model_save_path))
 
     def set_dataset(self, data, labels):
+        print("Start making dataloader.")
+
         # 将数据和标签转换为 PyTorch 的 Tensor 类型
-        data_tensor = torch.Tensor(data)
-        label_tensor = torch.Tensor(labels).long()  # 注意，对于 CrossEntropyLoss，标签需要是 long 类型
+        if not isinstance(data, torch.Tensor):
+            data_tensor = torch.Tensor(data)
+        else:
+            data_tensor = data
+        if not isinstance(labels, torch.Tensor):
+            label_tensor = torch.Tensor(labels).long()  # 注意，对于 CrossEntropyLoss，标签需要是 long 类型
+        else:
+            label_tensor = labels
         
          # 分割训练集和验证集
         split_index = int(0.9 * len(data_tensor))
@@ -93,6 +110,8 @@ class Trainer(object):
         self.val_dataloader = DataLoader(val_dataset, batch_size=self.batch_size, shuffle=False)
 
     def load_dataset(self, file_path = './data/database.pkl'):
+        print("Start loading dataset.")
+
         with open(file_path, 'rb') as file:
             database = pickle.load(file)
 
@@ -118,6 +137,8 @@ class Trainer(object):
     def train(self):
         model = self.model
 
+        print("Start training.")
+
         # 训练模型
         for epoch in range(self.num_epochs):
             for data_batch, label_batch in self.train_dataloader:
@@ -132,10 +153,11 @@ class Trainer(object):
                 loss.backward()
                 self.optimizer.step()
 
-            print(f'Epoch [{epoch+1}/{self.num_epochs}], Loss: {loss.item()}')
+            # print(f'Epoch [{epoch+1}/{self.num_epochs}], Loss: {loss.item()}')
 
             if epoch % 10 == 1:
                 print(f"No. {epoch} epoch.")
+                self.validate()
                 # 保存模型到指定路径
                 torch.save(model.state_dict(), self.model_save_path)
         
