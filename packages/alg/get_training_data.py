@@ -124,13 +124,15 @@ class Get_Training_Data(object):
         #       targets(a list of ints) + p_link (a float) + p_s (a float) + bw (a float) + lt (a float) + csp (an int)
         # label (length = 1): strategy - a number in {0,1,2,3}
 
-        database = []
+        database = self.load_data("database.pkl")
+        if database is None:
+            database = []
 
-        for i in range(self.config['training_data_num']):
+        for i in range(len(database), self.config['training_data_num']):
             if i % 100 == 1:
                 print(f"No. {i} data.")
                 self.save_data(database, "database.pkl")
-                self.save_data(i, "data_num.txt")
+                # self.save_data(i, f"data_num_{i}")
 
             follower = Server(id=0, config=self.config)
 

@@ -22,5 +22,5 @@ def eval(t_length=100):
 if __name__ == "__main__":
     config = read_config('config_F_estimation.yml')
 
-    # generate_training_data()
-    train()
+    generate_training_data()
+    # train()
