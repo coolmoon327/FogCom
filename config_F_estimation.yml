@@ -6,7 +6,7 @@ seed: 88
 # An estimation group is a tuple {task, servers}
 group_num: 100
 
-training_data_num: 10000000
+training_data_num: 1000000000
 
 T: 0
 N_u: 0

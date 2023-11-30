@@ -138,12 +138,11 @@ class Get_Training_Data(object):
 
         mp_num = 0
 
-        for i in range(len(database), self.config['training_data_num']):
+        while len(database) < self.config['training_data_num']:
             result = pool.apply_async(get_data, args=(self.config, self.es_groups))
             results.append(result)
 
             mp_num += 1
-
             if mp_num >= processing_num:
                 pool.close()
                 pool.join()
@@ -163,7 +162,7 @@ class Get_Training_Data(object):
 def get_data(config, es_groups):
     data_list = []
 
-    for i in range(1000):
+    for i in range(10000):
 
         follower = Server(id=0, config=config)
 

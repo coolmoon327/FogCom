@@ -31,7 +31,7 @@ class CustomClassifier(nn.Module):
         x = self.softmax(x)
         return x
     
-    def validate(self, dataloader, criterion):
+    def validate(self, dataloader, criterion, device="cpu"):
         # 设置为评估模式
         self.eval()
 
@@ -40,6 +40,10 @@ class CustomClassifier(nn.Module):
 
         with torch.no_grad():
             for data, label in dataloader:
+                # 将数据移至GPU
+                data = data.to(device)
+                label = label.to(device)
+
                 # 前向传播
                 outputs = self(data)
 
@@ -76,6 +80,8 @@ class Trainer(object):
         self.output_size = 4  
         # 四个类别 {0, 1, 2, 3}
 
+        self.device = torch.device(f"cuda" if torch.cuda.is_available() else "cpu")
+
         # 创建模型
         self.model = CustomClassifier(self.input_size, self.output_size)
 
@@ -88,60 +94,58 @@ class Trainer(object):
     def load_model(self):
         self.model.load_state_dict(torch.load(self.model_save_path))
 
-    def set_dataset(self, data, labels):
-        print("Start making dataloader.")
-
-        # 将数据和标签转换为 PyTorch 的 Tensor 类型
-        if not isinstance(data, torch.Tensor):
-            data_tensor = torch.Tensor(data)
-        else:
-            data_tensor = data
-        if not isinstance(labels, torch.Tensor):
-            label_tensor = torch.Tensor(labels).long()  # 注意，对于 CrossEntropyLoss，标签需要是 long 类型
-        else:
-            label_tensor = labels
-        
-         # 分割训练集和验证集
-        split_index = int(0.9 * len(data_tensor))
-        train_dataset = TensorDataset(data_tensor[:split_index], label_tensor[:split_index])
-        val_dataset = TensorDataset(data_tensor[split_index:], label_tensor[split_index:])
-
-        self.train_dataloader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True)
-        self.val_dataloader = DataLoader(val_dataset, batch_size=self.batch_size, shuffle=False)
-
     def load_dataset(self, file_path = './data/database.pkl'):
         print("Start loading dataset.")
 
         with open(file_path, 'rb') as file:
             database = pickle.load(file)
+        
+        print("Finished loading data.")
 
         # 提取 targets, state 和 strategy
-        targets = [item['targets'][:self.t_length] for item in database]
-        state = [item['state'] for item in database]
+        data = [torch.cat([torch.Tensor(item['targets'][:self.t_length]).float(), torch.Tensor(item['state']).float()], dim=0) for item in database]
         labels = [item['strategy'] for item in database]
-
-        # 合并 targets 和 state 为 data
-        data = [torch.cat([torch.Tensor(target), torch.Tensor(s)], dim=0) for target, s in zip(targets, state)]
+        del database
+        print("Finished extracting data.")
 
         # 将数据和标签转换为 PyTorch 的 Tensor 类型
-        data_tensor = torch.stack(data)
-        label_tensor = torch.Tensor(labels).long()
+        data_tensor = torch.stack(data).to(torch.float32)
+        del data
 
-        self.set_dataset(data_tensor, label_tensor)
+        label_tensor = torch.Tensor(labels).long()
+        del labels
 
         # 打印 data 与 labels 的维度
         print("Data Dimensions:", data_tensor.shape)
         print("Label Dimensions:", label_tensor.shape)
 
+        print("Start making dataloader.")
+        
+         # 分割训练集和验证集
+        split_index = int(0.99 * len(data_tensor))
+        train_dataset = TensorDataset(data_tensor[:split_index], label_tensor[:split_index])
+        val_dataset = TensorDataset(data_tensor[split_index:], label_tensor[split_index:])
+
+        del data_tensor,label_tensor
+        print("Finished splitting data.")
+
+        self.train_dataloader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True)
+        self.val_dataloader = DataLoader(val_dataset, batch_size=self.batch_size, shuffle=False)
+
 
     def train(self):
-        model = self.model
+        model = self.model.to(self.device)
+        optimizer = self.optimizer
 
         print("Start training.")
 
         # 训练模型
         for epoch in range(self.num_epochs):
             for data_batch, label_batch in self.train_dataloader:
+                # 将数据移至GPU
+                data_batch = data_batch.to(self.device)
+                label_batch = label_batch.to(self.device)
+
                 # 前向传播
                 outputs = model(data_batch)
 
@@ -149,11 +153,11 @@ class Trainer(object):
                 loss = self.criterion(outputs, label_batch)
 
                 # 反向传播和优化
-                self.optimizer.zero_grad()
+                optimizer.zero_grad()
                 loss.backward()
-                self.optimizer.step()
+                optimizer.step()
 
-            # print(f'Epoch [{epoch+1}/{self.num_epochs}], Loss: {loss.item()}')
+            print(f'Epoch [{epoch+1}/{self.num_epochs}], Loss: {loss.item()}')
 
             if epoch % 10 == 1:
                 print(f"No. {epoch} epoch.")
@@ -166,5 +170,5 @@ class Trainer(object):
     def validate(self):
         model = self.model
         
-        val_loss, val_accuracy = model.validate(self.val_dataloader, self.criterion)
+        val_loss, val_accuracy = model.validate(self.val_dataloader, self.criterion, self.device)
         print(f'Validation Loss: {val_loss}, Validation Accuracy: {val_accuracy}')
