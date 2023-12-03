@@ -133,14 +133,47 @@ class Trainer(object):
         self.val_dataloader = DataLoader(val_dataset, batch_size=self.batch_size, shuffle=False)
 
 
-    def train(self):
+    def load_tensor_database(self, dir_path='./data/transformed', file_num=0):
+        data_path = f'{dir_path}/data{file_num}.pt'
+        labels_path = f'{dir_path}/labels{file_num}.pt'
+        data = torch.load(data_path)
+        labels = torch.load(labels_path)
+        if self.t_length < 100:
+            data = torch.cat([data[:, :self.t_length], data[:, 100:]], dim=1)
+
+        train_dataset = TensorDataset(data, labels)
+        self.train_dataloader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True)
+
+    def load_tensor_val(self, dir_path='./data/transformed/val'):
+        data_path = f'{dir_path}/data.pt'
+        labels_path = f'{dir_path}/labels.pt'
+        data = torch.load(data_path)
+        labels = torch.load(labels_path)
+        if self.t_length < 100:
+            data = torch.cat([data[:, :self.t_length], data[:, 100:]], dim=1)
+
+        val_dataset = TensorDataset(data, labels)
+        self.val_dataloader = DataLoader(val_dataset, batch_size=self.batch_size, shuffle=False)
+
+    def train(self, use_multi_datasets=False):
         model = self.model.to(self.device)
         optimizer = self.optimizer
+
+        splited_num = 20
+        single_db_training_num = int(self.num_epochs/splited_num)
+        db_num = 0
 
         print("Start training.")
 
         # 训练模型
         for epoch in range(self.num_epochs):
+            if use_multi_datasets:
+                if epoch % single_db_training_num == 0:
+                    if db_num:
+                        del self.train_dataloader
+                    self.load_tensor_database(file_num=db_num)
+                    db_num = (db_num + 1) % splited_num
+
             for data_batch, label_batch in self.train_dataloader:
                 # 将数据移至GPU
                 data_batch = data_batch.to(self.device)
@@ -158,10 +191,11 @@ class Trainer(object):
                 optimizer.step()
 
             print(f'Epoch [{epoch+1}/{self.num_epochs}], Loss: {loss.item()}')
+            self.validate()
 
             if epoch % 10 == 1:
-                print(f"No. {epoch} epoch.")
-                self.validate()
+                # print(f"No. {epoch} epoch.")
+                # self.validate()
                 # 保存模型到指定路径
                 torch.save(model.state_dict(), self.model_save_path)
         
