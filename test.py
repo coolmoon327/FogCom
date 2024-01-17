@@ -7,7 +7,7 @@ if __name__ == "__main__":
     config = read_config('config.yml')
     
     # test_env(config)
-    # test_ppo(config, 100)
-    test_others(config)
+    test_ppo(config)
+    # test_others(config)
     
     

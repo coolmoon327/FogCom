@@ -8,6 +8,8 @@ from torch.distributions.normal import Normal
 import torch.multiprocessing as mp
 from ..env.wrapper import EnvWrapper
 from .eval import Evaluator
+from .draw import ResultCurve
+import openpyxl
 
 class ActorPPO(nn.Module):
     def __init__(self, dims: [int], state_dim: int, action_dim: int):
@@ -78,12 +80,12 @@ class Config:  # for on-policy
 
         '''Arguments for training'''
         self.net_dims = (512, 128, 32)  # the middle layer dimension of MLP (MultiLayer Perceptron)
-        self.learning_rate = 6e-5  # 2 ** -14 ~= 6e-5
+        self.learning_rate = 1e-7  # 2 ** -14 ~= 6e-5
         self.soft_update_tau = 5e-3  # 2 ** -8 ~= 5e-3
-        self.batch_size = int(128)  # num of transitions sampled from replay buffer, default 128
-        self.horizon_len = int(2000)  # collect horizon_len step while exploring, then update network, default 2000
+        self.batch_size = int(512)  # num of transitions sampled from replay buffer, default 128
+        self.horizon_len = int(500)  # collect horizon_len step while exploring, then update network, default 2000
         self.buffer_size = None  # ReplayBuffer size. Empty the ReplayBuffer for on-policy.
-        self.repeat_times = 4.0  # repeatedly update network using ReplayBuffer to keep critic's loss small, default 8.0
+        self.repeat_times = 8.0  # repeatedly update network using ReplayBuffer to keep critic's loss small, default 8.0
 
         '''Arguments for device'''
         self.gpu_id = int(0)  # `int` means the ID of single GPU, -1 means CPU
@@ -370,11 +372,24 @@ def train_agent(args: Config, threads_num, result_list, lock):
         
         if eval_result is None or eval_result.ready():
             eval_result = evaluate_and_save(eval_pool, evaluator, agents[0], logging_tuple)
+
+            file_path = "./results/output.xlsx"
+            if os.path.exists(file_path):
+                workbook = openpyxl.load_workbook(file_path)
+                sheet = workbook.active
+                # 读取 SW 数据（SW 数据在第 9 列）
+                sw_data = []
+                for row in sheet.iter_rows(min_row=2, values_only=True):
+                    sw_value = row[8]  # 第 9 列的索引为 8
+                    sw_data.append(sw_value)
+                curve = ResultCurve()
+                curve.set_results(sw_data)
+                curve.save_plot("./results/reward_curve.png")
             
         # evaluator.evaluate_and_save(agents[0].act, args.horizon_len * threads_num, logging_tuple)
         if (evaluator.total_step > args.break_step) or os.path.exists(f"{args.cwd}/stop"):
             break  # stop training when reach `break_step` or `mkdir cwd/stop`
-        
+
         # 内存释放
         del buffer_items
 
@@ -390,20 +405,6 @@ def evaluate_and_save(pool, evaluator, agent, logging_tuple, save=True):
         torch.save(agent.cri.state_dict(), './results/cri_grad.pth')
     
     return eval_result
-
-def render_agent(env_class, env_args: dict, net_dims: [int], agent_class, actor_path: str, render_times: int = 8):
-    env = args.env_class(args.env_config)
-
-    state_dim = env_args['state_dim']
-    action_dim = env_args['action_dim']
-    agent = agent_class(net_dims, state_dim, action_dim, gpu_id=-1)
-    actor = agent.act
-
-    print(f"| render and load actor from: {actor_path}")
-    actor.load_state_dict(torch.load(actor_path, map_location=lambda storage, loc: storage))
-    for i in range(render_times):
-        cumulative_reward, episode_step = get_rewards_and_steps(env, actor, if_render=True)
-        print(f"|{i:4}  cumulative_reward {cumulative_reward:9.3f}  episode_step {episode_step:5.0f}")
 
 def set_args(config):
     agent_class = AgentPPO  # DRL algorithm name
@@ -430,14 +431,14 @@ def train_ppo_for_fogcom(config, threads_num, result_list, lock):
 
 def test(config, test_times=1):
     config['penalty'] = 0.
-    config['ganrantee_policy'] = True
+    config['ganrantee_policy'] = False
     if config['ganrantee_policy']:
         print("允许切换算法")
     args = set_args(config)
     
     act_grad_file = './results/act_grad.pth'
     
-    evaluator = Evaluator(eval_env=EnvWrapper(config), eval_times=100000)
+    evaluator = Evaluator(eval_env=EnvWrapper(config), eval_times=1000000)
     evaluator.agent = args.agent_class(args.net_dims, args.state_dim, args.action_dim, gpu_id=args.gpu_id, args=args)
     
     evaluator.total_step = 111

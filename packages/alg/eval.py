@@ -4,6 +4,7 @@ import numpy as np
 import os
 import torch.multiprocessing as mp
 from ..env.wrapper import EnvWrapper
+import openpyxl
 
 total_steps = 1
 
@@ -53,6 +54,44 @@ class Evaluator:
               f"| {avg_r:8.2f}  {std_r:6.2f}  {avg_s:6.0f}  "
               f"| {logging_tuple[0]:8.2f}  {logging_tuple[1]:8.2f}  "
               f"| drop_num={avg_drop_num:4.2f} sw={avg_sw:8.2f}")
+
+        file_path = "./results/output.xlsx"
+
+        if os.path.exists(file_path):
+            workbook = openpyxl.load_workbook(file_path)
+            # 选择默认的活动工作表
+            sheet = workbook.active
+            # 获取已存在的行数（用于确定增量写入的行号）
+            existing_rows = sheet.max_row
+        else:
+            workbook = openpyxl.Workbook()
+            # 选择默认的活动工作表
+            sheet = workbook.active
+            # 写入标题行
+            sheet.append(["Total Step", "Used Time", "Avg R", "Std R", "Avg S", "Log 1", "Log 2", "Drop Num", "SW"])
+
+        # 写入数据行
+        total_step = self.total_step
+        used_time = used_time
+        avg_r = avg_r
+        std_r = std_r
+        avg_s = avg_s
+        log1 = logging_tuple[0]
+        log2 = logging_tuple[1]
+        drop_num = avg_drop_num
+        sw = avg_sw
+
+        if os.path.exists(file_path):
+            row_data = [total_step, used_time, avg_r, std_r, avg_s, log1, log2, drop_num, sw]
+            # 在已存在的行数上进行增量写入（逐行写入）
+            for i, data in enumerate(row_data, start=1):
+                sheet.cell(row=existing_rows + i, column=i, value=data)
+        else:
+            sheet.append([total_step, used_time, avg_r, std_r, avg_s, log1, log2, drop_num, sw])
+
+        # 保存工作簿到文件
+        workbook.save(file_path)
+
     
     def test_with_inner_policy(self, policy_id):
         rewards_steps_ary = [step_with_inner_policy(self.env_eval, policy_id) for _ in range(self.eval_times)]
