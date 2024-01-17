@@ -1,11 +1,11 @@
 results/
 __pycache__/
-data/
 *.out
 *.pyc
 *.pkl
 *.pth
 *.run
+*.pt
 
 !*.py
 !*.md

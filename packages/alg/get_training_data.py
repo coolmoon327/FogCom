@@ -6,6 +6,7 @@ from ..env.fogcom.user import User
 from ..env.fogcom.utils import LinkCheck
 import pickle
 import os
+import multiprocessing as mp
 
 class Get_Training_Data(object):
     def __init__(self, config: dict):
@@ -127,26 +128,57 @@ class Get_Training_Data(object):
         database = self.load_data("database.pkl")
         if database is None:
             database = []
+        else:
+            print("Loaded sccessfully")
 
-        for i in range(len(database), self.config['training_data_num']):
-            if i % 100 == 1:
-                print(f"No. {i} data.")
+        processing_num = 36
+
+        pool = mp.Pool(processes=processing_num)
+        results = []
+
+        mp_num = 0
+
+        while len(database) < self.config['training_data_num']:
+            result = pool.apply_async(get_data, args=(self.config, self.es_groups))
+            results.append(result)
+
+            mp_num += 1
+            if mp_num >= processing_num:
+                pool.close()
+                pool.join()
+
+                for result in results:
+                    data_list = result.get(timeout=1)
+                    database += data_list
+
+                print(f"No. {len(database)} data.")
                 self.save_data(database, "database.pkl")
                 # self.save_data(i, f"data_num_{i}")
+                print("Finished saving.")
+                
+                pool = mp.Pool(processes=processing_num)
+                mp_num = 0
 
-            follower = Server(id=0, config=self.config)
+def get_data(config, es_groups):
+    data_list = []
 
-            target_ids = []
+    for i in range(10000):
 
-            for tuple in self.es_groups:
-                task = tuple['task']
-                servers = tuple['servers']
-                target = follower.select_storage(task, servers)
-                target_ids.append(servers.index(target))
-            
-            state = [follower.p_link, follower.p_s, 
-                     follower.bw, follower.lt, follower.csp]
+        follower = Server(id=0, config=config)
 
-            data = {'targets': target_ids, 'state': state, 'strategy':follower.strategy}
-            database.append(data)
+        target_ids = []
 
+        for tuple in es_groups:
+            task = tuple['task']
+            servers = tuple['servers']
+            target = follower.select_storage(task, servers)
+            target_ids.append(servers.index(target))
+        
+        state = [follower.p_link, follower.p_s, 
+                    follower.bw, follower.lt, follower.csp]
+
+        data = {'targets': target_ids, 'state': state, 'strategy':follower.strategy}
+
+        data_list.append(data)
+
+    return data_list
