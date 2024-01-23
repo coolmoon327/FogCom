@@ -79,13 +79,14 @@ class Config:  # for on-policy
         self.reward_scale = 1.0  # an approximate target reward usually be closed to 256
 
         '''Arguments for training'''
-        self.net_dims = (512, 128, 32)  # the middle layer dimension of MLP (MultiLayer Perceptron)
-        self.learning_rate = 1e-7  # 2 ** -14 ~= 6e-5
+        # self.net_dims = (2048, 512)  # the middle layer dimension of MLP (MultiLayer Perceptron)
+        self.net_dims = (512, 128, 32)
+        self.learning_rate = 1e-6  # 2 ** -14 ~= 6e-5
         self.soft_update_tau = 5e-3  # 2 ** -8 ~= 5e-3
         self.batch_size = int(512)  # num of transitions sampled from replay buffer, default 128
-        self.horizon_len = int(500)  # collect horizon_len step while exploring, then update network, default 2000
+        self.horizon_len = int(2000)  # collect horizon_len step while exploring, then update network, default 2000
         self.buffer_size = None  # ReplayBuffer size. Empty the ReplayBuffer for on-policy.
-        self.repeat_times = 8.0  # repeatedly update network using ReplayBuffer to keep critic's loss small, default 8.0
+        self.repeat_times = 4.0  # repeatedly update network using ReplayBuffer to keep critic's loss small, default 8.0
 
         '''Arguments for device'''
         self.gpu_id = int(0)  # `int` means the ID of single GPU, -1 means CPU
@@ -97,7 +98,7 @@ class Config:  # for on-policy
         self.if_remove = True  # remove the cwd folder? (True, False, None:ask me)
         self.break_step = +np.inf  # break training if 'total_step > break_step'
 
-        self.eval_times = int(10000)  # number of times that get episodic cumulative return, default 32
+        self.eval_times = int(32)  # number of times that get episodic cumulative return, default 32
         self.eval_per_step = int(1)  # evaluate the agent per training steps, default 2e4
         
         '''Dict from config.yml'''
@@ -156,7 +157,7 @@ class AgentPPO(AgentBase):
         self.cri_class = getattr(self, "cri_class", CriticPPO)
         AgentBase.__init__(self, net_dims, state_dim, action_dim, gpu_id, args)
 
-        self.ratio_clip = getattr(args, "ratio_clip", 0.25)  # `ratio.clamp(1 - clip, 1 + clip)`
+        self.ratio_clip = getattr(args, "ratio_clip", 0.25)  # `ratio.clamp(1 - clip, 1 + clip)`    default = 0.25
         self.lambda_gae_adv = getattr(args, "lambda_gae_adv", 0.95)  # could be 0.80~0.99
         self.lambda_entropy = getattr(args, "lambda_entropy", 0.01)  # could be 0.00~0.10
         self.lambda_entropy = torch.tensor(self.lambda_entropy, dtype=torch.float32, device=self.device)
@@ -377,13 +378,17 @@ def train_agent(args: Config, threads_num, result_list, lock):
             if os.path.exists(file_path):
                 workbook = openpyxl.load_workbook(file_path)
                 sheet = workbook.active
-                # 读取 SW 数据（SW 数据在第 9 列）
+                points_data = []
+                for row in sheet.iter_rows(min_row=2, values_only=True):
+                    points_value = row[0]
+                    points_data.append(points_value/40000)
                 sw_data = []
                 for row in sheet.iter_rows(min_row=2, values_only=True):
-                    sw_value = row[8]  # 第 9 列的索引为 8
+                    sw_value = row[8]  # 读取 SW 数据（SW 数据在第 9 列）, 第 9 列的索引为 8
                     sw_data.append(sw_value)
                 curve = ResultCurve()
                 curve.set_results(sw_data)
+                curve.set_points(points_data)
                 curve.save_plot("./results/reward_curve.png")
             
         # evaluator.evaluate_and_save(agents[0].act, args.horizon_len * threads_num, logging_tuple)

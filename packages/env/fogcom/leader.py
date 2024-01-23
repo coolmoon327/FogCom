@@ -111,7 +111,6 @@ class Leader(object):
         result_size = self.config["result_size"]
         bw_fd, lt_fd = 0., 0.
     
-        # TODO: 可能这部分也比较耗时, 测一下
         if estimate:
             bw_uf, lt_uf = self.config['link_check'].estimate(user, provider)
             if storage:

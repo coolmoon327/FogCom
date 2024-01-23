@@ -40,7 +40,7 @@ class Environment(object):
     | 3             | Price of Provider's Storage        | 10.                  | 50.                |
     | 4             | Bandwidth of Provider              | 1.                   | 50.                |
     | 5             | Latency of Provider                | 0.001                | 1.                 |
-    | 6 ~ tag_len+5 | Tags of Provider's Strategy        | 0                    | N_m                |
+    | 6 ~ tag_len+5 | Tags of Provider's Strategy        | 0                    | 1                  |
     | tag_len+6     | Candidate 0's ISP = Provider's?    | 0                    | 1                  |
     | tag_len+7     | Price of Candidate 0's VM Service  | 100.                 | 1000.              |
     | tag_len+8     | Upload Speed of Candidate 0        | 1.                   | 50.                |
@@ -268,6 +268,7 @@ class Environment(object):
             # Reward = - Alpha * t_vm - (p_link * t_vm + p_s * s * t_vm) - p_vm * t_vm
             reward = 2000 - (task.alpha + provider.p_link + provider.p_s * task.s + storage.p_vm) * provider.t_vm(task, storage, False) 
             sw = self.leader.social_welfare(task, provider, storage, False)
+            # reward = sw
 
         # 4. get next task (state)
         state = self.next_task()

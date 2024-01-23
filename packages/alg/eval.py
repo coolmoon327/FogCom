@@ -6,7 +6,7 @@ import torch.multiprocessing as mp
 from ..env.wrapper import EnvWrapper
 import openpyxl
 
-total_steps = 1
+total_steps = 100
 
 class Evaluator:
     def __init__(self, eval_env, eval_per_step: int = 1e4, eval_times: int = 8, cwd: str = '.', print_head = True):
@@ -39,11 +39,11 @@ class Evaluator:
         rewards_steps_ary = np.array(rewards_steps_ary)
         info = rewards_steps_ary[:, 2]
         rewards_steps_ary = np.array(rewards_steps_ary[:, :2], dtype=np.float32)
-        avg_r = rewards_steps_ary[:, 0].mean()  # average of cumulative rewards
-        std_r = rewards_steps_ary[:, 0].std()  # std of cumulative rewards
+        avg_r = rewards_steps_ary[:, 0].mean() / total_steps  # average of cumulative rewards
+        std_r = rewards_steps_ary[:, 0].std() / total_steps  # std of cumulative rewards
         avg_s = rewards_steps_ary[:, 1].mean()  # average of steps in an episode
         avg_drop_num = np.mean([info[i]['drop_num'] for i in range(len(info))])
-        avg_sw = np.mean([info[i]['sw'] for i in range(len(info))])
+        avg_sw = np.mean([info[i]['sw'] for i in range(len(info))]) / total_steps
 
         # print("结束测试")
         
@@ -68,7 +68,7 @@ class Evaluator:
             # 选择默认的活动工作表
             sheet = workbook.active
             # 写入标题行
-            sheet.append(["Total Step", "Used Time", "Avg R", "Std R", "Avg S", "Log 1", "Log 2", "Drop Num", "SW"])
+            sheet.append(["Total Step", "Used Time", "Avg R", "Std R", "Avg S", "objC", "objA", "Drop Num", "SW"])
 
         # 写入数据行
         total_step = self.total_step
@@ -85,7 +85,7 @@ class Evaluator:
             row_data = [total_step, used_time, avg_r, std_r, avg_s, log1, log2, drop_num, sw]
             # 在已存在的行数上进行增量写入（逐行写入）
             for i, data in enumerate(row_data, start=1):
-                sheet.cell(row=existing_rows + i, column=i, value=data)
+                sheet.cell(row=existing_rows + 1, column=i, value=data)
         else:
             sheet.append([total_step, used_time, avg_r, std_r, avg_s, log1, log2, drop_num, sw])
 

@@ -8,13 +8,16 @@ class ResultCurve:
         self.all = 579.63
         self.optimal = 3799.86
         self.ppo_results = []
-        self.time_points = []
+        self.time_points = []   # TODO: 这里不太对，应该和 step 统一
         self.steps = 0
 
     def set_results(self, results: list):
         self.ppo_results = results
         self.steps = len(self.ppo_results)
         self.time_points = range(0, self.steps)
+
+    def set_points(self, pionts):
+        self.time_points = pionts
 
     def update_results(self, new_results: list):
         self.ppo_results += new_results
@@ -24,7 +27,7 @@ class ResultCurve:
     def save_plot(self, filename):
         # 设置图形尺寸和标题
         plt.figure(figsize=(8, 6))
-        plt.title("Rewards Comparison")
+        # plt.title("Results Comparison")
 
         # 绘制基准线和 PPO 奖励曲线
         plt.plot(self.time_points, [self.random_action for _ in range(self.steps)], label="Random Action")
@@ -41,6 +44,7 @@ class ResultCurve:
 
         # 保存图像到指定位置
         plt.savefig(filename)
+        plt.close()
 
 if __name__ == "__main__":
     # 创建 ResultCurve 对象

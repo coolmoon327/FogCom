@@ -33,9 +33,9 @@ ganrantee_policy: false # whether use an inner policy to select node for ganrant
 batch_size: 512
 break_step: 100000000  # break training if 'total_step > break_step'
 
-gamma: 0.97  # discount factor of future rewards
-repeat_times: 16  # repeatedly update network using ReplayBuffer to keep critic's loss small
-penalty: -1000. # penalty for wrong selection (Null Node)
+gamma: 0  # discount factor of future rewards
+repeat_times: 4  # repeatedly update network using ReplayBuffer to keep critic's loss small
+penalty: -10000. # penalty for wrong selection (Null Node)
 
 force_worker_tag_in_state: -1  # -1: allow env to use the real tag
 
