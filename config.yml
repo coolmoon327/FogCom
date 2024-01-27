@@ -20,7 +20,7 @@ follower_strategies_num: 4
 # 2 - storage-conservative
 # 3 - CSP-preference
 alpha: 1.
-beta: 10.
+beta: 100.
 M: 10000
 
 tag_len: 4 # the length of test tags
@@ -31,13 +31,15 @@ ganrantee_policy: false # whether use an inner policy to select node for ganrant
 # Training
 
 batch_size: 512
-break_step: 100000000  # break training if 'total_step > break_step'
+break_step: 1000000  # break training if 'total_step > break_step'
 
 gamma: 0  # discount factor of future rewards
 repeat_times: 4  # repeatedly update network using ReplayBuffer to keep critic's loss small
 penalty: -10000. # penalty for wrong selection (Null Node)
 
 force_worker_tag_in_state: -1  # -1: allow env to use the real tag
+
+eval_times: 512
 
 # Miscellaneous
 

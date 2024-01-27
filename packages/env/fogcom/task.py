@@ -6,9 +6,11 @@ class VM(object):
     def __init__(self, id, size=-1.):
         self.id = id
         if size == -1.:
-            size = np.random.randint(1000, 10000) * 0.1   # [100., 1000.] MB
+            # size = np.random.randint(1000, 10000) * 0.1   # [100., 1000.] MB
+            size = 1000
         self.size = size
-        self.block_size = self.size * np.random.randint(1, 2) / 100. # [1, 20.] MB, [50, 100] blocks per vm
+        # self.block_size = self.size * np.random.randint(1, 2) / 100. # [1, 20.] MB, [50, 100] blocks per vm
+        self.block_size = self.size *  1/100.
 
         self.servers = []
         

@@ -4,4 +4,21 @@
 
 修改:
 1. reward 好像有点问题?
-2. PPO 里多进程不能用一个 net, 试着修改 agent
+2. 或许 follower 的 policy 有问题
+
+========
+
+1. 先把各个地方的随机性降低看看
+- task.py
+- user.py
+
+2. 全部设置为已知
+- server.py: self.is_known = True
+
+效果不行
+
+========
+
+改神经网络，增加 batch norm，改网络规模
+暂时调小训练总步数
+加了 eval()

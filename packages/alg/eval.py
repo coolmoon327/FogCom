@@ -34,6 +34,7 @@ class Evaluator:
     def evaluate_and_save(self, logging_tuple: tuple):
         # print("开始测试")
         actor = self.agent.act
+        actor.eval()
         
         rewards_steps_ary = [get_rewards_and_steps(self.env_eval, actor) for _ in range(self.eval_times)]
         rewards_steps_ary = np.array(rewards_steps_ary)
@@ -98,11 +99,11 @@ class Evaluator:
         rewards_steps_ary = np.array(rewards_steps_ary)
         info = rewards_steps_ary[:, 2]
         rewards_steps_ary = np.array(rewards_steps_ary[:, :2], dtype=np.float32)
-        avg_r = rewards_steps_ary[:, 0].mean()  # average of cumulative rewards
-        std_r = rewards_steps_ary[:, 0].std()  # std of cumulative rewards
+        avg_r = rewards_steps_ary[:, 0].mean() / total_steps  # average of cumulative rewards
+        std_r = rewards_steps_ary[:, 0].std() / total_steps  # std of cumulative rewards
         avg_s = rewards_steps_ary[:, 1].mean()  # average of steps in an episode
         avg_drop_num = np.mean([info[i]['drop_num'] for i in range(len(info))])
-        avg_sw = np.mean([info[i]['sw'] for i in range(len(info))])
+        avg_sw = np.mean([info[i]['sw'] for i in range(len(info))]) / total_steps
         
         used_time = time.time() - self.start_time
         print(f"| {self.total_step}  {used_time:8.0f}  "
@@ -162,8 +163,8 @@ def test(config):
     config["penalty"] = 0.
     num = 5
     
-    evaluators = [Evaluator(eval_env=EnvWrapper(config), eval_times=1000000, print_head=False) for _ in range(num-1)]
-    evaluators.append(Evaluator(eval_env=EnvWrapper(config), eval_times=100000))   # 独立一个出来打印
+    evaluators = [Evaluator(eval_env=EnvWrapper(config), eval_times=config["eval_times"], print_head=False) for _ in range(num-1)]
+    evaluators.append(Evaluator(eval_env=EnvWrapper(config), eval_times=config["eval_times"]))   # 独立一个出来打印
     
     pool = mp.Pool(processes=10)
     for i in range(num):

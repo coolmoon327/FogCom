@@ -13,11 +13,14 @@ class User(Node):
 
     def generate_task(self):
         t = self.config['n_slot']
-        s = np.random.randint(100, 200) * 0.1       # [10., 20.] MB
-        w = 5 * np.random.randint(100, 1000) * 1e6  # [5e8, 5e9] cycles
+        # s = np.random.randint(100, 200) * 0.1       # [10., 20.] MB
+        s = 10.
+        # w = 5 * np.random.randint(100, 1000) * 1e6  # [5e8, 5e9] cycles
+        w = 5e8
         sid = np.random.randint(0, self.config['vm_num'])
         b0 = 12500 #np.random.randint(5000, 15000)
-        alpha = np.random.randint(500, 1000) * 1.   # [500, 1000]
+        # alpha = np.random.randint(500, 1000) * 1.   # [500, 1000]
+        alpha = 750
         task = Task(t, s, w, sid, b0, alpha)
         task.set_user(self)
         return task

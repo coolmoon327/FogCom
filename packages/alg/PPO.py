@@ -55,8 +55,8 @@ class CriticPPO(nn.Module):
 def build_mlp(dims: [int]) -> nn.Sequential:  # MLP (MultiLayer Perceptron)
     net_list = []
     for i in range(len(dims) - 1):
-        net_list.extend([nn.Linear(dims[i], dims[i + 1]), nn.ReLU()])
-    del net_list[-1]  # remove the activation of output layer
+        net_list.extend([nn.Linear(dims[i], dims[i + 1]), nn.BatchNorm1d(dims[i + 1]), nn.ReLU()])
+    del net_list[-2:]  # remove the activation of output layer
     return nn.Sequential(*net_list)
 
 
@@ -79,17 +79,17 @@ class Config:  # for on-policy
         self.reward_scale = 1.0  # an approximate target reward usually be closed to 256
 
         '''Arguments for training'''
-        # self.net_dims = (2048, 512)  # the middle layer dimension of MLP (MultiLayer Perceptron)
-        self.net_dims = (512, 128, 32)
+        self.net_dims = (2048, 512)  # the middle layer dimension of MLP (MultiLayer Perceptron)
+        # self.net_dims = (512, 128, 32)
         self.learning_rate = 1e-6  # 2 ** -14 ~= 6e-5
         self.soft_update_tau = 5e-3  # 2 ** -8 ~= 5e-3
         self.batch_size = int(512)  # num of transitions sampled from replay buffer, default 128
-        self.horizon_len = int(2000)  # collect horizon_len step while exploring, then update network, default 2000
+        self.horizon_len = int(1000)  # collect horizon_len step while exploring, then update network, default 2000
         self.buffer_size = None  # ReplayBuffer size. Empty the ReplayBuffer for on-policy.
         self.repeat_times = 4.0  # repeatedly update network using ReplayBuffer to keep critic's loss small, default 8.0
 
         '''Arguments for device'''
-        self.gpu_id = int(0)  # `int` means the ID of single GPU, -1 means CPU
+        self.gpu_id = int(3)  # `int` means the ID of single GPU, -1 means CPU
         self.thread_num = int(8)  # cpu_num for pytorch, `torch.set_num_threads(self.num_threads)`
         self.random_seed = int(0)  # initialize random seed in self.init_before_training()
 
@@ -171,6 +171,7 @@ class AgentPPO(AgentBase):
 
         ary_state = self.last_state
 
+        self.act.eval()
         get_action = self.act.get_action
         convert = self.act.convert_action_for_env
         for i in range(horizon_len):
@@ -187,6 +188,8 @@ class AgentPPO(AgentBase):
             logprobs[i] = logprob
             rewards[i] = reward
             dones[i] = done
+
+        self.act.train()
 
         self.last_state = ary_state
         rewards = (rewards * self.reward_scale).unsqueeze(1)
@@ -232,10 +235,12 @@ class AgentPPO(AgentBase):
             advantage = advantages[indices]
             reward_sum = reward_sums[indices]
 
+            self.cri.train()
             value = self.cri(state).squeeze(1)  # critic network predicts the reward_sum (Q value) of state
             obj_critic = self.criterion(value, reward_sum)
             self.optimizer_update(self.cri_optimizer, obj_critic)
 
+            self.act.train()
             new_logprob, obj_entropy = self.act.get_logprob_entropy(state, action)
             ratio = (new_logprob - logprob.detach()).exp()
             surrogate1 = advantage * ratio
@@ -257,7 +262,9 @@ class AgentPPO(AgentBase):
         horizon_len = rewards.shape[0]
 
         next_state = torch.tensor(self.last_state, dtype=torch.float32).to(self.device)
+        self.cri.eval()
         next_value = self.cri(next_state.unsqueeze(0)).detach().squeeze(1).squeeze(0)
+        self.cri.train()
 
         advantage = 0  # last_gae_lambda
         for t in range(horizon_len - 1, -1, -1):
@@ -279,6 +286,7 @@ def explore_and_store_result(agent, env, act_shared_model, act_target_shared_mod
     return ret
 
 def train_agent(args: Config, threads_num, result_list, lock):
+    args.steps_per_train = args.horizon_len * max(threads_num, 1)
     args.init_before_training()
 
     envs = [args.env_class(args.env_config) for _ in range(max(threads_num,1))]
@@ -372,24 +380,7 @@ def train_agent(args: Config, threads_num, result_list, lock):
         evaluator.total_step += args.horizon_len * threads_num
         
         if eval_result is None or eval_result.ready():
-            eval_result = evaluate_and_save(eval_pool, evaluator, agents[0], logging_tuple)
-
-            file_path = "./results/output.xlsx"
-            if os.path.exists(file_path):
-                workbook = openpyxl.load_workbook(file_path)
-                sheet = workbook.active
-                points_data = []
-                for row in sheet.iter_rows(min_row=2, values_only=True):
-                    points_value = row[0]
-                    points_data.append(points_value/40000)
-                sw_data = []
-                for row in sheet.iter_rows(min_row=2, values_only=True):
-                    sw_value = row[8]  # 读取 SW 数据（SW 数据在第 9 列）, 第 9 列的索引为 8
-                    sw_data.append(sw_value)
-                curve = ResultCurve()
-                curve.set_results(sw_data)
-                curve.set_points(points_data)
-                curve.save_plot("./results/reward_curve.png")
+            eval_result = evaluate_and_save(eval_pool, evaluator, agents[0], logging_tuple, args)
             
         # evaluator.evaluate_and_save(agents[0].act, args.horizon_len * threads_num, logging_tuple)
         if (evaluator.total_step > args.break_step) or os.path.exists(f"{args.cwd}/stop"):
@@ -398,7 +389,7 @@ def train_agent(args: Config, threads_num, result_list, lock):
         # 内存释放
         del buffer_items
 
-def evaluate_and_save(pool, evaluator, agent, logging_tuple, save=True):
+def evaluate_and_save(pool, evaluator, agent, logging_tuple, args: Config, save=True, draw=True):
     evaluator.eval_step = evaluator.total_step
     evaluator.agent.act.load_state_dict(agent.act.state_dict())
     eval_result = pool.apply_async(evaluator.evaluate_and_save, args=(logging_tuple,))
@@ -408,6 +399,24 @@ def evaluate_and_save(pool, evaluator, agent, logging_tuple, save=True):
             os.makedirs("./results")
         torch.save(agent.act.state_dict(), './results/act_grad.pth')
         torch.save(agent.cri.state_dict(), './results/cri_grad.pth')
+
+    if draw:
+        file_path = "./results/output.xlsx"
+        if os.path.exists(file_path):
+            workbook = openpyxl.load_workbook(file_path)
+            sheet = workbook.active
+            points_data = []
+            for row in sheet.iter_rows(min_row=2, values_only=True):
+                points_value = row[0]
+                points_data.append(points_value/args.steps_per_train)
+            sw_data = []
+            for row in sheet.iter_rows(min_row=2, values_only=True):
+                sw_value = row[8]  # 读取 SW 数据（SW 数据在第 9 列）, 第 9 列的索引为 8
+                sw_data.append(sw_value)
+            curve = ResultCurve()
+            curve.set_results(sw_data)
+            curve.set_points(points_data)
+            curve.save_plot("./results/reward_curve.png")
     
     return eval_result
 
@@ -428,6 +437,7 @@ def set_args(config):
     args.net_dims = (64, 32)  # the middle layer dimension of MultiLayer Perceptron
     args.gamma = config['gamma']  # discount factor of future rewards
     args.repeat_times = config['repeat_times']  # repeatedly update network using ReplayBuffer to keep critic's loss small
+    args.eval_times = config["eval_times"]
     return args
 
 def train_ppo_for_fogcom(config, threads_num, result_list, lock):
@@ -443,7 +453,7 @@ def test(config, test_times=1):
     
     act_grad_file = './results/act_grad.pth'
     
-    evaluator = Evaluator(eval_env=EnvWrapper(config), eval_times=1000000)
+    evaluator = Evaluator(eval_env=EnvWrapper(config), eval_times=config["eval_times"])
     evaluator.agent = args.agent_class(args.net_dims, args.state_dim, args.action_dim, gpu_id=args.gpu_id, args=args)
     
     evaluator.total_step = 111

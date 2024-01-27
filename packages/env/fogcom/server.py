@@ -28,8 +28,10 @@ class Server(Node):
         # Notably, a server knows all the nodes from its CSP. We handle this condition in select_storage func.
         # assuming each node has visited 20% nodes in history
         # TODO: 这里是影响对 f 策略估计的最大变数, 但是 training data 里已经排除了影响
-        self.is_known = [True if np.random.randint(0, 10) < 3 else False for _ in range(self.config['N_m'])]  # index: server_id, value: known or not
-        
+        # self.is_known = [True if np.random.randint(0, 10) < 3 else False for _ in range(self.config['N_m'])]  # index: server_id, value: known or not
+        self.is_known = True
+
+
         # 4. set states
         self.occupied = False
 
