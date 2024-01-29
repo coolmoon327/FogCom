@@ -1,14 +1,15 @@
 import matplotlib.pyplot as plt
 import os
 import openpyxl
+from statistics import mean
 
 class ResultCurve:
     def __init__(self):
-        self.random_action = 1575.24    # 0
-        self.random_select = 4305.29    # 1
-        self.greedy = 5939.08    # 2
-        self.all = 5812.87  # 4
-        self.optimal = 6358.53  # 3
+        self.random_action = 615.98   # 0
+        self.random_select = 1074    # 1
+        self.greedy = 2710    # 2
+        self.all = 2371  # 4
+        self.optimal = 5085  # 3
         self.ppo_results = []
         self.time_points = []   # TODO: 这里不太对，应该和 step 统一
         self.steps = 0
@@ -56,12 +57,21 @@ if __name__ == "__main__":
         points_data = []
         for row in sheet.iter_rows(min_row=2, values_only=True):
             points_value = row[0]
-            points_data.append(points_value)
+            points_data.append(points_value / 10000)    # threads_num * horizon_len
         sw_data = []
         for row in sheet.iter_rows(min_row=2, values_only=True):
             sw_value = row[8]  # 读取 SW 数据（SW 数据在第 9 列）, 第 9 列的索引为 8
             sw_data.append(sw_value)
+
+        # 计算滑动平均值
+        window_size = 10  # 滑动窗口大小
+        smoothed_sw_data = []
+        for i in range(len(sw_data) - window_size + 1):
+            window = sw_data[i : i + window_size]
+            smoothed_value = mean(window)
+            smoothed_sw_data.append(smoothed_value)
+
         curve = ResultCurve()
-        curve.set_results(sw_data)
-        curve.set_points(points_data)
+        curve.set_results(smoothed_sw_data)  # 使用滑动平均值数据
+        curve.set_points(points_data[:len(smoothed_sw_data)])
         curve.save_plot("../../results/reward_curve.png")

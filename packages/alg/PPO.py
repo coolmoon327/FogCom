@@ -83,7 +83,7 @@ class Config:  # for on-policy
         # self.net_dims = (512, 128, 32)
         self.learning_rate = 1e-6  # 2 ** -14 ~= 6e-5
         self.soft_update_tau = 5e-3  # 2 ** -8 ~= 5e-3
-        self.batch_size = int(512)  # num of transitions sampled from replay buffer, default 128
+        self.batch_size = int(500)  # num of transitions sampled from replay buffer, default 128
         self.horizon_len = int(1000)  # collect horizon_len step while exploring, then update network, default 2000
         self.buffer_size = None  # ReplayBuffer size. Empty the ReplayBuffer for on-policy.
         self.repeat_times = 4.0  # repeatedly update network using ReplayBuffer to keep critic's loss small, default 8.0
@@ -383,7 +383,7 @@ def train_agent(args: Config, threads_num, result_list, lock):
             eval_result = evaluate_and_save(eval_pool, evaluator, agents[0], logging_tuple, args)
             
         # evaluator.evaluate_and_save(agents[0].act, args.horizon_len * threads_num, logging_tuple)
-        if (evaluator.total_step > args.break_step) or os.path.exists(f"{args.cwd}/stop"):
+        if (evaluator.total_step/args.steps_per_train > args.break_step) or os.path.exists(f"{args.cwd}/stop"):
             break  # stop training when reach `break_step` or `mkdir cwd/stop`
 
         # 内存释放

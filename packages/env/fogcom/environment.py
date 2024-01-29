@@ -266,7 +266,7 @@ class Environment(object):
             provider: Node = task.provider()
             storage: Node = task.storage()
             # Reward = - Alpha * t_vm - (p_link * t_vm + p_s * s * t_vm) - p_vm * t_vm
-            reward = 2000 - (task.alpha + provider.p_link + provider.p_s * task.s + storage.p_vm) * provider.t_vm(task, storage, False) 
+            reward = 10000 - (task.alpha + provider.p_link + provider.p_s * task.s + storage.p_vm) * provider.t_vm(task, storage, False) 
             sw = self.leader.social_welfare(task, provider, storage, False)
             # reward = sw
 
@@ -284,6 +284,7 @@ class Environment(object):
         # 2 - greedy
         # 3 - greedy (observe all)
         # 4 - all
+        # 5 - all + just has follower with policy 0
         
         task = self.new_tasks[self.task_index-1]
         
@@ -310,11 +311,14 @@ class Environment(object):
                 if sw >= maxx:
                     maxx = sw
                     candidates = [node]
-        elif policy_id == 4:
+        elif policy_id == 4 or policy_id == 5:
             len_not_null = 0
             while not self.raw_candidates[len_not_null].is_Null():
                 len_not_null += 1
             candidates = self.raw_candidates[0:len_not_null]
+
+        if policy_id == 5:
+            task.provider().strategy = 0
             
         return self.execute_and_next(task, candidates)
     

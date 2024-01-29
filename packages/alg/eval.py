@@ -161,7 +161,7 @@ def step_with_inner_policy(env, policy_id: int):
 
 def test(config):
     config["penalty"] = 0.
-    num = 5
+    num = 6
     
     evaluators = [Evaluator(eval_env=EnvWrapper(config), eval_times=config["eval_times"], print_head=False) for _ in range(num-1)]
     evaluators.append(Evaluator(eval_env=EnvWrapper(config), eval_times=config["eval_times"]))   # 独立一个出来打印

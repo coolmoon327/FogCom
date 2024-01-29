@@ -7,7 +7,7 @@ __pycache__/
 *.run
 *.pt
 log.txt
-test.txt
+test*.txt
 
 !*.py
 !*.md
