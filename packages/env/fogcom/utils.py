@@ -26,7 +26,7 @@ class LinkCheck(object):
         else:
             # no exist, create a new link
             bw = np.random.randint(1, 50) / 100.    # [0.1, 50.] MBps
-            lt = np.random.randint(1, 200) * 1e-3   # [1, 200] * 1e-3 s
+            lt = np.random.randint(1, 300) * 1e-3   # [1, 200] * 1e-3 s
             value = {"bw": bw, "lt": lt}
             self.database[key1] = value
             self.database[key2] = value

@@ -8,7 +8,7 @@ from torch.distributions.normal import Normal
 import torch.multiprocessing as mp
 from ..env.wrapper import EnvWrapper
 from .eval import Evaluator
-from .draw import ResultCurve
+from .draw import draw_PPO
 import openpyxl
 
 class ActorPPO(nn.Module):
@@ -76,7 +76,7 @@ class Config:  # for on-policy
 
         '''Arguments for reward shaping'''
         self.gamma = 0.99  # discount factor of future rewards
-        self.reward_scale = 1.0  # an approximate target reward usually be closed to 256
+        self.reward_scale =  0.1  # an approximate target reward usually be closed to 256
 
         '''Arguments for training'''
         self.net_dims = (2048, 512)  # the middle layer dimension of MLP (MultiLayer Perceptron)
@@ -389,34 +389,36 @@ def train_agent(args: Config, threads_num, result_list, lock):
         # 内存释放
         del buffer_items
 
-def evaluate_and_save(pool, evaluator, agent, logging_tuple, args: Config, save=True, draw=True):
+def evaluate_and_save(pool, evaluator, agent, logging_tuple, args: Config, save_net=True, draw=True):
     evaluator.eval_step = evaluator.total_step
     evaluator.agent.act.load_state_dict(agent.act.state_dict())
-    eval_result = pool.apply_async(evaluator.evaluate_and_save, args=(logging_tuple,))
+    evaluator.agent.cri.load_state_dict(agent.cri.state_dict())
+    eval_result = pool.apply_async(evaluator.evaluate_and_save, args=(logging_tuple, save_net))
     
-    if save:
-        if not os.path.exists("./results"):
-            os.makedirs("./results")
-        torch.save(agent.act.state_dict(), './results/act_grad.pth')
-        torch.save(agent.cri.state_dict(), './results/cri_grad.pth')
+    # if save:
+    #     if not os.path.exists("./results"):
+    #         os.makedirs("./results")
+    #     torch.save(agent.act.state_dict(), './results/act_grad.pth')
+    #     torch.save(agent.cri.state_dict(), './results/cri_grad.pth')
 
     if draw:
         file_path = "./results/output.xlsx"
         if os.path.exists(file_path):
-            workbook = openpyxl.load_workbook(file_path)
-            sheet = workbook.active
-            points_data = []
-            for row in sheet.iter_rows(min_row=2, values_only=True):
-                points_value = row[0]
-                points_data.append(points_value/args.steps_per_train)
-            sw_data = []
-            for row in sheet.iter_rows(min_row=2, values_only=True):
-                sw_value = row[8]  # 读取 SW 数据（SW 数据在第 9 列）, 第 9 列的索引为 8
-                sw_data.append(sw_value)
-            curve = ResultCurve()
-            curve.set_results(sw_data)
-            curve.set_points(points_data)
-            curve.save_plot("./results/reward_curve.png")
+            draw_PPO(file_path, 30)
+            # workbook = openpyxl.load_workbook(file_path)
+            # sheet = workbook.active
+            # points_data = []
+            # for row in sheet.iter_rows(min_row=2, values_only=True):
+            #     points_value = row[0]
+            #     points_data.append(points_value/args.steps_per_train)
+            # sw_data = []
+            # for row in sheet.iter_rows(min_row=2, values_only=True):
+            #     sw_value = row[8]  # 读取 SW 数据（SW 数据在第 9 列）, 第 9 列的索引为 8
+            #     sw_data.append(sw_value)
+            # curve = ResultCurve()
+            # curve.set_results(sw_data)
+            # curve.set_points(points_data)
+            # curve.save_plot("./results/reward_curve.png")
     
     return eval_result
 

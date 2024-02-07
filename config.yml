@@ -31,11 +31,11 @@ ganrantee_policy: false # whether use an inner policy to select node for ganrant
 # Training
 
 batch_size: 500
-break_step: 1000  # break training if 'total_step/steps_per_train > break_step'
+break_step: 2100  # break training if 'total_step/steps_per_train > break_step'
 
 gamma: 0  # discount factor of future rewards
-repeat_times: 1  # repeatedly update network using ReplayBuffer to keep critic's loss small
-penalty: -200000. # penalty for wrong selection (Null Node)
+repeat_times: 2  # repeatedly update network using ReplayBuffer to keep critic's loss small
+penalty: 0. # -200000. # penalty for wrong selection (Null Node)
 
 force_worker_tag_in_state: -1  # -1: allow env to use the real tag
 
@@ -44,7 +44,7 @@ eval_times: 10
 # Miscellaneous
 
 results_path: results
-debug_mode: 1
+debug_mode: 0
 log_pretext: test
 
 # Note: in the fogcom environment, the dict derived from config.yml is also used to sync some global variables:

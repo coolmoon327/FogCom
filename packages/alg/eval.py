@@ -19,6 +19,7 @@ class Evaluator:
         self.eval_per_step = eval_per_step  # evaluate the agent per training steps
 
         self.agent = None
+        self.log_max_r = -1e6
         
         self.recorder = []
         if print_head:
@@ -29,9 +30,9 @@ class Evaluator:
                 f"\n| `avgS`: Average of steps in an episode."
                 f"\n| `objC`: Objective of Critic network. Or call it loss function of critic network."
                 f"\n| `objA`: Objective of Actor network. It is the average Q value of the critic network."
-                f"\n| {'step':>8}  {'time':>8}  | {'avgR':>8}  {'stdR':>6}  {'avgS':>6}  | {'objC':>8}  {'objA':>8}")
+                f"\n| {'step':>8}  {'time':>8}  | {'avgR':>8}  {'stdR':>6}  {'avgS':>6}  | {'objC':>8}  {'objA':>8} | {'drop_num':>6} | {'SW_mean':>8} {'SW_std':>8}")
 
-    def evaluate_and_save(self, logging_tuple: tuple):
+    def evaluate_and_save(self, logging_tuple: tuple, save_net=False):
         # print("开始测试")
         actor = self.agent.act
         actor.eval()
@@ -45,6 +46,7 @@ class Evaluator:
         avg_s = rewards_steps_ary[:, 1].mean()  # average of steps in an episode
         avg_drop_num = np.mean([info[i]['drop_num'] for i in range(len(info))])
         avg_sw = np.mean([info[i]['sw'] for i in range(len(info))]) / total_steps
+        std_sw = np.std([info[i]['sw'] for i in range(len(info))]) / total_steps
 
         # print("结束测试")
         
@@ -54,7 +56,16 @@ class Evaluator:
         print(f"| {self.total_step:8.2e}  {used_time:8.0f}  "
               f"| {avg_r:8.2f}  {std_r:6.2f}  {avg_s:6.0f}  "
               f"| {logging_tuple[0]:8.2f}  {logging_tuple[1]:8.2f}  "
-              f"| drop_num={avg_drop_num:4.2f} sw={avg_sw:8.2f}")
+              f"| {avg_drop_num:4.2f}  "
+              f"| {avg_sw:8.2f}  {std_sw:8.2f}")
+
+        if save_net:
+            if not os.path.exists("./results"):
+                os.makedirs("./results")
+            if self.log_max_r <= avg_r:
+                self.log_max_r = avg_r
+                torch.save(self.agent.act.state_dict(), './results/act_grad.pth')
+                torch.save(self.agent.cri.state_dict(), './results/cri_grad.pth')
 
         file_path = "./results/output.xlsx"
 
@@ -69,26 +80,16 @@ class Evaluator:
             # 选择默认的活动工作表
             sheet = workbook.active
             # 写入标题行
-            sheet.append(["Total Step", "Used Time", "Avg R", "Std R", "Avg S", "objC", "objA", "Drop Num", "SW"])
+            sheet.append(["Total Step", "Used Time", "Avg R", "Std R", "Avg S", "objC", "objA", "Drop Num", "SW Mean", "SW Std"])
 
         # 写入数据行
-        total_step = self.total_step
-        used_time = used_time
-        avg_r = avg_r
-        std_r = std_r
-        avg_s = avg_s
-        log1 = logging_tuple[0]
-        log2 = logging_tuple[1]
-        drop_num = avg_drop_num
-        sw = avg_sw
-
         if os.path.exists(file_path):
-            row_data = [total_step, used_time, avg_r, std_r, avg_s, log1, log2, drop_num, sw]
+            row_data = [self.total_step, used_time, avg_r, std_r, avg_s, logging_tuple[0], logging_tuple[1], avg_drop_num, avg_sw, std_sw]
             # 在已存在的行数上进行增量写入（逐行写入）
             for i, data in enumerate(row_data, start=1):
                 sheet.cell(row=existing_rows + 1, column=i, value=data)
         else:
-            sheet.append([total_step, used_time, avg_r, std_r, avg_s, log1, log2, drop_num, sw])
+            sheet.append([self.total_step, used_time, avg_r, std_r, avg_s, logging_tuple[0], logging_tuple[1], avg_drop_num, avg_sw, std_sw])
 
         # 保存工作簿到文件
         workbook.save(file_path)
@@ -104,12 +105,14 @@ class Evaluator:
         avg_s = rewards_steps_ary[:, 1].mean()  # average of steps in an episode
         avg_drop_num = np.mean([info[i]['drop_num'] for i in range(len(info))])
         avg_sw = np.mean([info[i]['sw'] for i in range(len(info))]) / total_steps
+        std_sw = np.std([info[i]['sw'] for i in range(len(info))]) / total_steps
         
-        used_time = time.time() - self.start_time
+        used_time = time.time() - self.start_time        
         print(f"| {self.total_step}  {used_time:8.0f}  "
               f"| {avg_r:8.2f}  {std_r:6.2f}  {avg_s:6.0f}  "
               f"| None  None  "
-              f"| drop_num={avg_drop_num:4.2f} sw={avg_sw:8.2f}")
+              f"| {avg_drop_num:4.2f}  "
+              f"| {avg_sw:8.2f}  {std_sw:8.2f}")
 
 
 def get_rewards_and_steps(env, actor, if_render: bool = False):  # cumulative_rewards and episode_steps
