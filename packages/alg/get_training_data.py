@@ -7,6 +7,7 @@ from ..env.fogcom.utils import LinkCheck
 import pickle
 import os
 import multiprocessing as mp
+import numpy as np
 
 class Get_Training_Data(object):
     def __init__(self, config: dict):
@@ -96,13 +97,49 @@ class Get_Training_Data(object):
     def generate_estimation_groups_and_save(self):
         print("Start generation.")
 
-        self.es_groups = []
-        for _ in range(self.config['group_num']):
+        config = self.config
+        f_num = 1000
+
+        print(f"Start generating {f_num} followers.")
+
+        followers = [Server(id=i, config=config) for i in range(f_num)]
+
+        print("Start generate raw groups.")
+
+        # self.es_groups = []
+        
+        es_groups = []
+        es_groups_std = []
+
+        for _ in range(self.config['group_num']*500):
             task = self.pseudo_user.generate_task()
             servers = [Server(id=i, config=self.config) for i in range(self.config['cand_num'])]
-            self.es_groups.append({'task':task, 'servers':servers})
+            # self.es_groups.append({'task':task, 'servers':servers})
+            
+            target_ids = []
+            for f in followers:
+                target = f.select_storage(task, servers)
+                if target is None:
+                    continue
+                target_ids.append(servers.index(target))
+            
+            es_groups_std.append(np.std(np.array(target_ids)))
+            es_groups.append({'task':task, 'servers':servers})
         
-        print("Finished generation.")
+        print("Finished generating raw groups.")
+
+        print("Start sorting by std.")
+
+
+        sorted_tuples = sorted(zip(es_groups, es_groups_std), key=lambda x: x[1], reverse=True)
+        es_groups_sorted = [x[0] for x in sorted_tuples]
+        self.es_groups = es_groups_sorted[:self.config['group_num']]
+
+        print("Finished sorting.")
+        
+        std_sorted = [x[1] for x in sorted_tuples]
+        # print(std_sorted[:self.config['group_num']])
+        print(std_sorted)
 
         self.save_data(self.es_groups, "es_groups.pkl")
 
@@ -172,6 +209,8 @@ def get_data(config, es_groups):
             task = tuple['task']
             servers = tuple['servers']
             target = follower.select_storage(task, servers)
+            if target is None:
+                    continue
             target_ids.append(servers.index(target))
         
         state = [follower.p_link, follower.p_s, 

@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 import pickle
+import matplotlib.pyplot as plt
+
 
 class CustomClassifier(nn.Module):
     def __init__(self, input_size, output_size):
@@ -10,8 +12,8 @@ class CustomClassifier(nn.Module):
         self.fc1 = nn.Linear(input_size, 128)
         self.relu = nn.ReLU()
         self.fc2 = nn.Linear(128, 512)
-        self.fc3 = nn.Linear(512, 1024)
-        self.fc4 = nn.Linear(1024, 512)
+        # self.fc3 = nn.Linear(512, 1024)
+        # self.fc4 = nn.Linear(1024, 512)
         self.fc5 = nn.Linear(512, 64)
         self.fc6 = nn.Linear(64, output_size)
         self.softmax = nn.Softmax(dim=1)
@@ -21,10 +23,10 @@ class CustomClassifier(nn.Module):
         x = self.relu(x)
         x = self.fc2(x)
         x = self.relu(x)
-        x = self.fc3(x)
-        x = self.relu(x)
-        x = self.fc4(x)
-        x = self.relu(x)
+        # x = self.fc3(x)
+        # x = self.relu(x)
+        # x = self.fc4(x)
+        # x = self.relu(x)
         x = self.fc5(x)
         x = self.relu(x)
         x = self.fc6(x)
@@ -80,7 +82,9 @@ class Trainer(object):
         self.output_size = 4  
         # 四个类别 {0, 1, 2, 3}
 
-        self.device = torch.device(f"cuda" if torch.cuda.is_available() else "cpu")
+        # self.device = torch.device(f"cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device("cuda:3")
+        # self.device = torch.device("cpu")
 
         # 创建模型
         self.model = CustomClassifier(self.input_size, self.output_size)
@@ -92,7 +96,11 @@ class Trainer(object):
         self.model_save_path = f'./data/classifier_model_{t_length}.pth'
 
     def load_model(self):
-        self.model.load_state_dict(torch.load(self.model_save_path))
+        try:
+            self.model.load_state_dict(torch.load(self.model_save_path))
+            print("Loaded model.")
+        except:
+            print("No saved model.")
 
     def load_dataset(self, file_path = './data/database.pkl'):
         print("Start loading dataset.")
@@ -133,9 +141,13 @@ class Trainer(object):
         self.val_dataloader = DataLoader(val_dataset, batch_size=self.batch_size, shuffle=False)
 
 
-    def load_tensor_database(self, dir_path='./data/transformed', file_num=0):
-        data_path = f'{dir_path}/data{file_num}.pt'
-        labels_path = f'{dir_path}/labels{file_num}.pt'
+    def load_tensor_database(self, dir_path='./data/transformed', file_num=-1):
+        if file_num == -1:
+            data_path = f'{dir_path}/data.pt'
+            labels_path = f'{dir_path}/labels.pt'
+        else:
+            data_path = f'{dir_path}/data{file_num}.pt'
+            labels_path = f'{dir_path}/labels{file_num}.pt'
         data = torch.load(data_path)
         labels = torch.load(labels_path)
         if self.t_length < 100:
@@ -155,7 +167,7 @@ class Trainer(object):
         val_dataset = TensorDataset(data, labels)
         self.val_dataloader = DataLoader(val_dataset, batch_size=self.batch_size, shuffle=False)
 
-    def train(self, use_multi_datasets=False):
+    def train(self, use_multi_datasets=False, draw_fig=True, val_in_batch=True):
         model = self.model.to(self.device)
         optimizer = self.optimizer
 
@@ -165,6 +177,9 @@ class Trainer(object):
 
         print("Start training.")
 
+        val_logs = []
+        log_step = 500
+
         # 训练模型
         for epoch in range(self.num_epochs):
             if use_multi_datasets:
@@ -173,7 +188,7 @@ class Trainer(object):
                         del self.train_dataloader
                     self.load_tensor_database(file_num=db_num)
                     db_num = (db_num + 1) % splited_num
-
+            bi = 0
             for data_batch, label_batch in self.train_dataloader:
                 # 将数据移至GPU
                 data_batch = data_batch.to(self.device)
@@ -190,19 +205,35 @@ class Trainer(object):
                 loss.backward()
                 optimizer.step()
 
-            print(f'Epoch [{epoch+1}/{self.num_epochs}], Loss: {loss.item()}')
-            self.validate()
+                if bi % log_step == 0 and val_in_batch:
+                    print(f'Epoch [{epoch+1}/{self.num_epochs}], Batch [{bi}], Loss: {loss.item()}')
+                    val_logs.append(self.validate())
+                bi += 1
 
             if epoch % 10 == 1:
                 # print(f"No. {epoch} epoch.")
                 # self.validate()
                 # 保存模型到指定路径
                 torch.save(model.state_dict(), self.model_save_path)
-        
+
         torch.save(model.state_dict(), self.model_save_path)
 
+        if draw_fig and val_in_batch:
+            num = len(val_logs)
+            accuracys = [val_logs[i][1] for i in range(num)]
+            plt.plot(range(0, log_step*num, log_step), accuracys, label='Validate Dataset')
+            plt.xlabel('Batch Number')
+            plt.ylabel('Accuracy')
+            # plt.title('Training Loss over Batches')
+            plt.legend()
+            plt.savefig('./data/training_accuracy_plot.png')
+        
+        return self.validate()
+
     def validate(self):
-        model = self.model
+        model = self.model.to(self.device)
         
         val_loss, val_accuracy = model.validate(self.val_dataloader, self.criterion, self.device)
         print(f'Validation Loss: {val_loss}, Validation Accuracy: {val_accuracy}')
+
+        return val_loss, val_accuracy

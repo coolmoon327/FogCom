@@ -6,7 +6,7 @@ __pycache__/
 *.pth
 *.run
 *.pt
-log.txt
+log*.txt
 test*.txt
 
 !*.py
