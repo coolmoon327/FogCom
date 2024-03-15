@@ -10,7 +10,7 @@ if __name__ == "__main__":
     
     # test_env(config)
     np.random.seed(config['seed'])
-    # test_ppo(config)
-    test_others(config)
+    test_ppo(config)
+    # test_others(config)
     
     

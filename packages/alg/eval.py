@@ -125,9 +125,20 @@ def get_rewards_and_steps(env, actor, if_render: bool = False):  # cumulative_re
     episode_steps = 0
     cumulative_returns = 0.0  # sum of rewards in an episode
     
+    test_PPO_time = False
+    if test_PPO_time:
+        PPO_time = []   # ms
+
     for episode_steps in range(total_steps):
+        if test_PPO_time: 
+            PPO_start_time = time.time()
         tensor_state = torch.as_tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
         tensor_action = actor(tensor_state)
+        if test_PPO_time: 
+            PPO_end_time = time.time()
+            PPO_time.append((PPO_end_time - PPO_start_time)*1000)
+            # print(episode_steps, "PPO elapsed time:", (PPO_end_time - PPO_start_time)*1000, device)
+            # exit()
         action = tensor_action.detach().cpu().numpy()[0]  # not need detach(), because using torch.no_grad() outside
         state, reward, done, info = env.step(action)
         cumulative_returns += reward
@@ -139,6 +150,25 @@ def get_rewards_and_steps(env, actor, if_render: bool = False):  # cumulative_re
             env.render()
         if done:
             break
+    
+    if test_PPO_time:
+        # 计算平均值和标准差
+        mean = np.mean(PPO_time)
+        std = np.std(PPO_time)
+
+        # 定义阈值，通常是 Z 分数超过3
+        threshold = 3
+
+        # 找到非离群点
+        non_outliers = [x for x in PPO_time if (x - mean) < threshold * std]
+
+        # 计算非离群点的平均值
+        filtered_mean = np.mean(non_outliers)
+
+        # print("原始数据：", PPO_time)
+        print("平均值：", mean)
+        # print("去除离群点后的数据：", non_outliers)
+        print("平均值（去除离群点后）：", filtered_mean)
 
     others = {"drop_num":drop_num, "sw":sw}
     return cumulative_returns, episode_steps + 1, others
