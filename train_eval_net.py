@@ -57,17 +57,21 @@ def draw_dif_tl():
 
     tls = list(range(1, 21))
 
+    # 设置中文字体
+    plt.rcParams['font.sans-serif'] = ['SimHei']  # 设置中文显示
+    plt.rcParams['axes.unicode_minus'] = False    # 解决负号显示问题
+
     plt.figure(figsize=(12, 8))
 
     plt.bar(tls, val_accuracy_list, label='Validate Dataset', zorder=1)
     
     # 添加图例和坐标轴标签
     # plt.legend(loc='lower right', fontsize=16)
-    plt.xlabel("ST Length", fontsize=28, weight='bold')
-    plt.ylabel("Accuracy", fontsize=28, weight='bold')
+    plt.xlabel("策略标签长度", fontsize=35, weight='bold')
+    plt.ylabel("测试集的预测准确度", fontsize=35, weight='bold')
 
-    plt.tick_params(axis='x', labelsize=16)
-    plt.tick_params(axis='y', labelsize=16)
+    plt.tick_params(axis='x', labelsize=20)
+    plt.tick_params(axis='y', labelsize=20)
 
     plt.ylim(0.4, 1.05)
     plt.xlim(0, 21)
