@@ -85,24 +85,24 @@ def PPO(config, agent):
 
 if __name__ == "__main__":
     config = read_config('config.yml')
-    np.random.seed(config['seed'])
+    # np.random.seed(config['seed'])
 
     act_grad_file = './results/act_grad.pth'
     act_model = torch.load(act_grad_file)
     args = set_args(config)
     agent = args.agent_class(args.net_dims, args.state_dim, args.action_dim, gpu_id=args.gpu_id, args=args)
-    agent.act.load_state_dict(act_model)
+    # agent.act.load_state_dict(act_model)
     PPO(copy.deepcopy(config),agent)    # 用来消除加载延迟
 
-    # print(scheduled_after_PING_serial(config))
-    # print(scheduled_after_PING_parallel(config))
-    # print(PPO(config))
+    # config["N_m"] = 1000000
+    # print(PPO(copy.deepcopy(config),agent))
+    # exit()
 
     ping_s = []
     ping_p = []
     ppo = []
 
-    sticks = range(10, 101, 5)
+    sticks = range(4, 101, 3)
 
     for i in sticks:
         config["N_m"] = i
@@ -128,9 +128,9 @@ if __name__ == "__main__":
     # plt.title("Results Comparison")
 
     # 绘制基准线和 PPO 奖励曲线
-    plt.plot(sticks, ppo, color='blue', linewidth=2, label="PPO 筛选")
-    plt.plot(sticks, ping_s, color='orange', linewidth=2, label="最优选择 + 串行探测")
-    plt.plot(sticks, ping_p, color='pink', linewidth=2, label="最优选择 + 并行探测")
+    plt.plot(sticks, ppo, color='blue', linewidth=3, label="PPO 筛选")
+    plt.plot(sticks, ping_s, color='orange', linewidth=3, label="最优选择+串行探测")
+    plt.plot(sticks, ping_p, color='pink', linewidth=3, label="最优选择+并行探测")
 
     # plt.ylim(0, 1000)
     # plt.xlim(0, 1000)
