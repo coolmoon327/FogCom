@@ -120,7 +120,7 @@ if __name__ == "__main__":
     print(ping_s[-1], ping_p[-1], ppo[-1])
 
     # 设置中文字体
-    plt.rcParams['font.sans-serif'] = ['SimHei']  # 设置中文显示
+    plt.rcParams['font.sans-serif'] = ['SimSong'] # 设置中文显示
     plt.rcParams['axes.unicode_minus'] = False    # 解决负号显示问题
 
     # 设置图形尺寸和标题

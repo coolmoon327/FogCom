@@ -37,7 +37,7 @@ class ResultCurve:
 
     def save_plot(self, filename):
         # 设置中文字体
-        plt.rcParams['font.sans-serif'] = ['SimHei']  # 设置中文显示
+        plt.rcParams['font.sans-serif'] = ['SimSong']  # 设置中文显示
         plt.rcParams['axes.unicode_minus'] = False    # 解决负号显示问题
 
         # 设置图形尺寸和标题
@@ -56,7 +56,7 @@ class ResultCurve:
             # 填充两根线之间的区域
             plt.fill_between(self.time_points, self.ceil_list, self.floor_list, color='lightblue', alpha=0.5, label="Std")
 
-        plt.ylim(0, 1800)
+        # plt.ylim(0, 1800)
         plt.xlim(1, max(self.time_points))
         # plt.xlim(0, 1000)
 
@@ -79,7 +79,8 @@ def draw_PPO(file_path, window_size = 0, print_smoothed=False): # 滑动窗口�
         points_data = []
         for row in sheet.iter_rows(min_row=2, values_only=True):
             points_value = row[0]
-            points_data.append(points_value / 10000)    # threads_num * horizon_len
+            # points_data.append(points_value / 10000)    # threads_num * horizon_len
+            points_data.append(points_value / 1000) 
         sw_data = []
         for row in sheet.iter_rows(min_row=2, values_only=True):
             sw_value = row[8]  # 读取 SW 数据（SW 数据在第 9 列）, 第 9 列的索引为 8
@@ -96,8 +97,8 @@ def draw_PPO(file_path, window_size = 0, print_smoothed=False): # 滑动窗口�
             smoothed_ceil_data = []
             smoothed_floor_data = []
             stds = []
-            # for i in range(len(sw_data) - window_size + 1):
-            for i in range(1295):
+            for i in range(len(sw_data) - window_size + 1):
+            # for i in range(1295):
                 window = sw_data[i : i + window_size]
                 smoothed_value = mean(window)
                 smoothed_sw_data.append(smoothed_value)

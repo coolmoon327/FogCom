@@ -24,6 +24,7 @@ class EnvWrapper:
 
     def step(self, action):
         next_state, reward, terminal, info_dict = self.env.step(action.ravel())
+        next_state = self.normalise_state(next_state)
         next_state = next_state.reshape(self.state_dim)
         return next_state, float(reward), terminal, info_dict
 
@@ -48,6 +49,13 @@ class EnvWrapper:
         return self.env.action_space
 
     def normalise_state(self, state):
+        if self.config['no_tag_mode']:
+            # print(state)
+            tag_len = self.config['follower_strategies_num']
+            # 6 ~ tag_len+5
+            for i in range(6, tag_len+6):
+                state[i] = 1.
+            # print(state)
         return state
 
     def normalise_reward(self, reward):

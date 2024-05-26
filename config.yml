@@ -46,6 +46,7 @@ eval_times: 10
 results_path: results
 debug_mode: 0
 log_pretext: test
+no_tag_mode: 1  # 没有跟随者 tag 的 PPO, 模拟把跟随者策略建模在状态转移中的其他方法
 
 # Note: in the fogcom environment, the dict derived from config.yml is also used to sync some global variables:
 # n_slot - the current number of slots

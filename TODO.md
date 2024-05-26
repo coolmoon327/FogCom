@@ -61,3 +61,9 @@
 调整 reward_scale
 
 还可以，其实就是训练次数不够
+
+========= 5.26
+
+训练一组不带标签的，作为对比实验，并出图
+修改了 wrapper 的 normalise_state
+修改了 draw.py，记得 points_data.append(points_value / 1000) 需要根据 step 进行修改
